@@ -206,7 +206,8 @@ public:
 		bEnableAdd = bNewEanbled;
 		return bEanbled;
 	}
-	const StorageDataType* FindData(const UStruct* Class)
+
+	StorageDataType* FindData(const UStruct* Class) const
 	{
 		auto Ptr = Find(Class);
 		return Ptr ? &Ptr->Data : (StorageDataType*)nullptr;

@@ -85,7 +85,7 @@ GENERICSTORAGES_API void* GetStructPropertyAddress(const TSharedPtr<IPropertyHan
 template<typename StructType>
 StructType* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer = nullptr, void** ContainerAddr = nullptr, bool bEnsure = true)
 {
-	FStructProperty* StructProperty = PropertyHandle.IsValid() ? CastProp<FStructProperty>(PropertyHandle->GetProperty()) : nullptr;
+	FStructProperty* StructProperty = PropertyHandle.IsValid() ? CastField<FStructProperty>(PropertyHandle->GetProperty()) : nullptr;
 	if (StructProperty && GetPropertyName<StructType>() == GetPropertyName(StructProperty))
 		return static_cast<StructType*>(GetStructPropertyAddress(PropertyHandle, Outer, ContainerAddr));
 	ensureAlways(!bEnsure);
@@ -98,7 +98,7 @@ GENERICSTORAGES_API void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHa
 template<typename ValueType>
 ValueType* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropertyHandle, FName MemberName, bool bEnsure = true)
 {
-	FStructProperty* StructProperty = CastProp<FStructProperty>(StructPropertyHandle->GetProperty());
+	FStructProperty* StructProperty = CastField<FStructProperty>(StructPropertyHandle->GetProperty());
 	auto MemberProerty = StructProperty->Struct->FindPropertyByName(MemberName);
 	if (MemberProerty && GetPropertyName<ValueType>() == GetPropertyName(MemberProerty))
 		return static_cast<ValueType*>(GetStructPropertyValuePtr(StructPropertyHandle, MemberName));

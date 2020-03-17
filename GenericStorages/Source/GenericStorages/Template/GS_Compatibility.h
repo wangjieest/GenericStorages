@@ -54,9 +54,9 @@ bool TrueOnFirstCall(const Type&)
 #	if ENGINE_MINOR_VERSION <= 20
 namespace ITS
 {
-template<typename E>
-using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
-/*
+	template<typename E>
+	using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
+	/*
 	GCC:
 	void foo() [with T = {type}]
 	clang:
@@ -66,29 +66,29 @@ using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !s
 	*/
 #		if defined(_MSC_VER)
 #			define Z_TEMPLATE_PARAMETER_NAME_ __FUNCSIG__
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
 #		else
 #			define Z_TEMPLATE_PARAMETER_NAME_ __PRETTY_FUNCTION__
 #			if defined(__clang__)
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			else
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			endif
 #		endif
 
-template<typename EnumType>
-static const char* TypeStr(void)
-{
-	static_assert(std::is_enum<EnumType>::value, "err");
-	constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
-	static char typeName[size] = {};
-	memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
+	template<typename EnumType>
+	static const char* TypeStr(void)
+	{
+		static_assert(std::is_enum<EnumType>::value, "err");
+		constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
+		static char typeName[size] = {};
+		memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
 
-	return typeName;
-}
+		return typeName;
+	}
 }  // namespace ITS
 
 template<typename EnumType>
@@ -195,15 +195,17 @@ using FMulticastDelegateProperty = UMulticastDelegateProperty;
 #		define CASTCLASS_FMulticastInlineDelegateProperty CASTCLASS_UMulticastInlineDelegateProperty
 #		define CASTCLASS_FMulticastSparseDelegateProperty CASTCLASS_UMulticastSparseDelegateProperty
 
+//////////////////////////////////////////////////////////////////////////
+
 template<typename To, typename From>
-FORCEINLINE auto CastProp(From* Prop)
+FORCEINLINE auto CastField(From* Prop)
 {
 	return Cast<To>(Prop);
 }
-
-FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
+template<typename To, typename From>
+FORCEINLINE auto CastFieldChecked(From* Prop)
 {
-	return Prop->GetOuter();
+	return CastChecked<To>(Prop);
 }
 
 FORCEINLINE EClassCastFlags GetPropCastFlags(FProperty* Prop)
@@ -211,20 +213,91 @@ FORCEINLINE EClassCastFlags GetPropCastFlags(FProperty* Prop)
 	return (EClassCastFlags)Prop->GetClass()->ClassCastFlags;
 }
 
-#	else
-template<typename To, typename From>
-FORCEINLINE auto CastProp(From* Prop)
+template<typename T>
+UClass* GetFieldOwnerClass(T* Field)
 {
-	return (Prop && (Prop->StaticClassCastFlags() & To::StaticClassCastFlagsPrivate()) != 0) ? static_cast<To*>(Prop) : (To*)nullptr;
-}
-FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
-{
-	return Prop->GetOwnerUObject();
+	return CastChecked<UClass>(Field->GetOuter());
 }
 
+template<typename T>
+struct TFieldPath
+{
+public:
+	TFieldPath(T* InField = nullptr)
+		: Field(InField)
+	{
+	}
+
+	void operator=(T* InField) { Field = InField; }
+
+	T* operator*() const { return Field; }
+	T* operator->() const { return Field; }
+
+	explicit bool operator bool() const { return !!Field; }
+	T* Get() const { return Field; }
+	T& GetOwnerVariant() const { return *Field; }
+	UClass* GetOwnerClass() const { return GetFieldOwnerClass(Field); }
+
+protected:
+	mutable T* Field;
+};
+
+template<typename T>
+using TFieldPathType = T*;
+template<typename T>
+FORCEINLINE T* GetPropPtr(T* Field)
+{
+	return Field;
+}
+template<typename T>
+FORCEINLINE T* GetPropPtr(TFieldPath<T>& Field)
+{
+	return Field.Get();
+}
+
+FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
+{
+	return Prop->GetOuter();
+}
+FORCEINLINE const FString& GetFieldName(FProperty* Prop)
+{
+	return Prop->GetOwner()->GetName();
+}
+
+#	else  // not (ENGINE_MINOR_VERSION < 25)
+
+//////////////////////////////////////////////////////////////////////////
+
+#		include "UObject/FieldPath.h"
 FORCEINLINE EClassCastFlags GetPropCastFlags(FProperty* Prop)
 {
 	return (EClassCastFlags)Prop->GetCastFlags();
+}
+template<typename T>
+using TFieldPathType = TFieldPath<T>;
+
+template<typename T>
+FORCEINLINE UClass* GetFieldOwnerClass(T* Field)
+{
+	return Field->GetOwnerClass();
+}
+template<typename T>
+FORCEINLINE T* GetPropPtr(T* Field)
+{
+	return Field;
+}
+template<typename T>
+FORCEINLINE FProperty* GetPropPtr(const TFieldPath<T>& Field)
+{
+	return const_cast<TFieldPath<T>&>(Field).Get();
+}
+FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
+{
+	return Prop->GetOwner<UObject>();
+}
+FORCEINLINE const FString& GetFieldName(FProperty* Prop)
+{
+	return Prop->GetOwnerVariant().GetName();
 }
 #	endif
 #endif

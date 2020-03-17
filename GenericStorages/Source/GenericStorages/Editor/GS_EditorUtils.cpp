@@ -59,7 +59,7 @@ FName GetPropertyName(FProperty* InProperty)
 
 	static TMap<KeyType, ValueType> DispatchMap{
 		//
-		DEF_PAIR_CELL_CUSTOM(FStructProperty, FName(*CastProp<FStructProperty>(Property)->Struct->GetName())),
+		DEF_PAIR_CELL_CUSTOM(FStructProperty, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
 		DEF_PAIR_CELL(FByteProperty),
 		DEF_PAIR_CELL(FBoolProperty),
 		DEF_PAIR_CELL(FIntProperty),
@@ -73,7 +73,7 @@ FName GetPropertyName(FProperty* InProperty)
 		DEF_PAIR_CELL(FStrProperty),
 		DEF_PAIR_CELL(FNameProperty),
 		DEF_PAIR_CELL(FTextProperty),
-		DEF_PAIR_CELL_CUSTOM(FEnumProperty, GetPropertyName(CastProp<FEnumProperty>(Property)->GetUnderlyingProperty())),
+		DEF_PAIR_CELL_CUSTOM(FEnumProperty, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty())),
 		DEF_PAIR_CELL(FLazyObjectProperty),
 		DEF_PAIR_CELL(FSoftObjectProperty),
 		DEF_PAIR_CELL(FWeakObjectProperty),
@@ -81,10 +81,10 @@ FName GetPropertyName(FProperty* InProperty)
 		DEF_PAIR_CELL_CUSTOM(FObjectProperty, GetPropertyName<UObject>()),
 		DEF_PAIR_CELL_CUSTOM(FClassProperty, GetPropertyName<UObject>()),
 		DEF_PAIR_CELL_CUSTOM(FSoftClassProperty, GetPropertyName<FSoftObjectPtr>()),
-		DEF_PAIR_CELL_CUSTOM(FArrayProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastProp<FArrayProperty>(Property)->Inner).ToString())),
-		DEF_PAIR_CELL_CUSTOM(FSetProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastProp<FSetProperty>(Property)->ElementProp).ToString())),
+		DEF_PAIR_CELL_CUSTOM(FArrayProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner).ToString())),
+		DEF_PAIR_CELL_CUSTOM(FSetProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp).ToString())),
 		DEF_PAIR_CELL_CUSTOM(FMapProperty,
-							 GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastProp<FMapProperty>(Property)->KeyProp).ToString(), *GetPropertyName(CastProp<FMapProperty>(Property)->ValueProp).ToString()))
+							 GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp).ToString()))
 		//
 	};
 	// clang-format on
@@ -99,10 +99,10 @@ FName GetPropertyName(FProperty* InProperty)
 #	else
 
 #		define DispathPropertyType(PropertyTypeName) \
-			else if (CastProp<PropertyTypeName>(InProperty)) { return GetPropertyName<typename PropertyTypeName::TCppType>(); }
+			else if (CastField<PropertyTypeName>(InProperty)) { return GetPropertyName<typename PropertyTypeName::TCppType>(); }
 
 	// clang-format off
-		if (FStructProperty* SubStructProperty = CastProp<FStructProperty>(InProperty))
+		if (FStructProperty* SubStructProperty = CastField<FStructProperty>(InProperty))
 		{
 			return *SubStructProperty->Struct->GetName();
 		}
@@ -119,44 +119,44 @@ FName GetPropertyName(FProperty* InProperty)
 			DispathPropertyType(FStrProperty)
 			DispathPropertyType(FNameProperty)
 			DispathPropertyType(FTextProperty)
-		else if (FEnumProperty* SubEnumProperty = CastProp<FEnumProperty>(InProperty))
+		else if (FEnumProperty* SubEnumProperty = CastField<FEnumProperty>(InProperty))
 		{
 			return GetPropertyName(SubEnumProperty->GetUnderlyingProperty());
 		}
 	// clang-format on
-	else if (CastProp<FObjectPropertyBase>(InProperty))
+	else if (CastField<FObjectPropertyBase>(InProperty))
 	{
 		// [PropertyClass] is the detail type of target
 		// Weak
-		if (CastProp<FWeakObjectProperty>(InProperty))
+		if (CastField<FWeakObjectProperty>(InProperty))
 		{
 			// FWeakObjectPtr
 			return GetPropertyName<FWeakObjectProperty::TCppType>();
 		}
 		// Object
-		// 		else if (CastProp<FClassProperty>(InProperty))
+		// 		else if (CastField<FClassProperty>(InProperty))
 		// 		{
 		// 			// UClassProperty is a specialization of UObjectProperty with MetaClass
 		// 			return GetPropertyName<UObject>();
 		// 		}
-		else if (CastProp<FObjectProperty>(InProperty))
+		else if (CastField<FObjectProperty>(InProperty))
 		{
 			// UObject*
 			return GetPropertyName<UObject>();
 		}
 		// SoftObject
-		// 		else if (CastProp<FSoftClassProperty>(InProperty))
+		// 		else if (CastField<FSoftClassProperty>(InProperty))
 		// 		{
 		// 			// USoftClassProperty is a specialization of USoftObjectProperty with MetaClass
 		// 			return GetPropertyName<FSoftObjectPtr>();
 		// 		}
-		else if (CastProp<FSoftObjectProperty>(InProperty))
+		else if (CastField<FSoftObjectProperty>(InProperty))
 		{
 			// FSoftObjectPtr
 			return GetPropertyName<FSoftObjectProperty::TCppType>();
 		}
 		// Lazy
-		else if (CastProp<FLazyObjectProperty>(InProperty))
+		else if (CastField<FLazyObjectProperty>(InProperty))
 		{
 			// FLazyObjectPtr
 			return GetPropertyName<FLazyObjectProperty::TCppType>();
@@ -167,13 +167,13 @@ FName GetPropertyName(FProperty* InProperty)
 			return GetPropertyName<UObject>();
 		}
 	}
-	else if (FArrayProperty* SubArrProperty = CastProp<FArrayProperty>(InProperty)) { return GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(SubArrProperty->Inner).ToString()); }
-	else if (FMapProperty* SubMapProperty = CastProp<FMapProperty>(InProperty))
+	else if (FArrayProperty* SubArrProperty = CastField<FArrayProperty>(InProperty)) { return GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(SubArrProperty->Inner).ToString()); }
+	else if (FMapProperty* SubMapProperty = CastField<FMapProperty>(InProperty))
 	{
 		return GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(SubMapProperty->KeyProp).ToString(), *GetPropertyName(SubMapProperty->ValueProp).ToString());
 	}
-	else if (FSetProperty* SubSetProperty = CastProp<FSetProperty>(InProperty)) { return GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(SubSetProperty->ElementProp).ToString()); }
-	else if (FInterfaceProperty* SubIncProperty = CastProp<FInterfaceProperty>(InProperty))
+	else if (FSetProperty* SubSetProperty = CastField<FSetProperty>(InProperty)) { return GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(SubSetProperty->ElementProp).ToString()); }
+	else if (FInterfaceProperty* SubIncProperty = CastField<FInterfaceProperty>(InProperty))
 	{
 		// FScriptInterface
 		return GetPropertyName<FInterfaceProperty::TCppType>();
@@ -218,16 +218,16 @@ FName GetPropertyName(FProperty* InProperty, EGSPropertyClass PropertyEnum, EGSP
 		DEF_PAIR_CELL(Str),
 		DEF_PAIR_CELL_CUSTOM(Object, GetPropertyName<UObject>()),
 		DEF_PAIR_CELL_CUSTOM(Class, GetPropertyName<UObject>()),
-		DEF_PAIR_CELL_CUSTOM(Array, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastProp<FArrayProperty>(Property)->Inner, InValueEnum).ToString())),
+		DEF_PAIR_CELL_CUSTOM(Array, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner, InValueEnum).ToString())),
 		DEF_PAIR_CELL_CUSTOM(
 			Map,
-			GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastProp<FMapProperty>(Property)->KeyProp, InKeyEnum).ToString(), *GetPropertyName(CastProp<FMapProperty>(Property)->ValueProp, InValueEnum).ToString())),
-		DEF_PAIR_CELL_CUSTOM(Set, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastProp<FSetProperty>(Property)->ElementProp, InValueEnum).ToString())),
-		DEF_PAIR_CELL_CUSTOM(Struct, FName(*CastProp<FStructProperty>(Property)->Struct->GetName())),
+			GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp, InKeyEnum).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp, InValueEnum).ToString())),
+		DEF_PAIR_CELL_CUSTOM(Set, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp, InValueEnum).ToString())),
+		DEF_PAIR_CELL_CUSTOM(Struct, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
 		DEF_PAIR_CELL(Delegate),
 		//DEF_PAIR_CELL(InlineMulticastDelegate),
 		DEF_PAIR_CELL(Text),
-		DEF_PAIR_CELL_CUSTOM(Enum, GetPropertyName(CastProp<FEnumProperty>(Property)->GetUnderlyingProperty()))};
+		DEF_PAIR_CELL_CUSTOM(Enum, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty()))};
 
 #	undef DEF_PAIR_CELL
 #	undef DEF_PAIR_CELL_CUSTOM
@@ -552,7 +552,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 			{
 				auto ParentParentHandle = ParentHandle->GetParentHandle();
 				auto ParentParentProperty = ParentParentHandle->GetProperty();
-				if (ensure(CastProp<FStructProperty>(ParentParentProperty)))
+				if (ensure(CastField<FStructProperty>(ParentParentProperty)))
 				{
 					void* ParentValueAddress = GetStructPropertyAddress(ParentParentHandle.ToSharedRef(), Outer);
 					ParentAddress = ParentParentProperty->ContainerPtrToValuePtr<void>(ParentValueAddress);
@@ -560,7 +560,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 			}
 			if (ParentHandle->AsArray())
 			{
-				auto ContainerProperty = CastProp<FArrayProperty>(ParentContainer);
+				auto ContainerProperty = CastField<FArrayProperty>(ParentContainer);
 				if (IsOutmost)
 				{
 					// Outer->Container[CurIndex]
@@ -580,7 +580,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 			}
 			if (ParentHandle->AsSet())
 			{
-				auto ContainerProperty = CastProp<FSetProperty>(ParentContainer);
+				auto ContainerProperty = CastField<FSetProperty>(ParentContainer);
 				if (IsOutmost)
 				{
 					// Outer->Container[CurIndex]
@@ -600,7 +600,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 			}
 			if (ParentHandle->AsMap())
 			{
-				auto ContainerProperty = CastProp<FMapProperty>(ParentContainer);
+				auto ContainerProperty = CastField<FMapProperty>(ParentContainer);
 
 				// FIXME Outer->Container[CurIndex].Key
 				auto KeyHandle = ParentHandle->GetKeyHandle();
@@ -627,7 +627,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 		else
 		{
 			auto Property = PropertyHandle->GetProperty();
-			if (ensure(CastProp<FStructProperty>(Property)))
+			if (ensure(CastField<FStructProperty>(Property)))
 			{
 				bool IsOutmost = GetOwnerUObject(Property)->IsA(UClass::StaticClass());
 				if (IsOutmost)
@@ -660,7 +660,7 @@ void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropert
 		if (OuterObjects.Num() != 1)
 			break;
 
-		FStructProperty* StructProperty = CastProp<FStructProperty>(StructPropertyHandle->GetProperty());
+		FStructProperty* StructProperty = CastField<FStructProperty>(StructPropertyHandle->GetProperty());
 		if (!StructProperty)
 			break;
 
