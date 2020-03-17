@@ -226,7 +226,7 @@ void AppendDeferComponents(AActor& Actor)
 
 void BeginListen()
 {
-	if (ClassStorage::TrueOnFirstCall([] {}))
+	if (TrueOnFirstCall([] {}))
 	{
 #if WITH_EDITOR
 		if (GIsEditor)

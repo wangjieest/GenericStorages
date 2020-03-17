@@ -321,7 +321,7 @@ bool UGenericSingletons::AsyncCreate(const UObject* BindedObject, const FString&
 
 UGenericSingletons::UGenericSingletons()
 {
-	if (ClassStorage::TrueOnFirstCall([] {}))
+	if (TrueOnFirstCall([] {}))
 	{
 		// GEngine->OnWorldAdded();
 		// GEngine->OnWorldDestroyed();

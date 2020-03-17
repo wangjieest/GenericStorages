@@ -33,14 +33,6 @@ THE SOFTWARE.
 
 namespace GS_TYPE_TRAITS
 {
-// void_t
-template<typename... T>
-struct MakeVoid
-{
-	using type = void;
-};
-template<typename... T>
-using VoidType = typename MakeVoid<T...>::type;
 // is_detected
 template<typename, template<typename...> class Op, typename... T>
 struct IsDetectedImpl : std::false_type

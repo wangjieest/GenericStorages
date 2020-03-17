@@ -68,7 +68,7 @@ struct TOnComponentInitialized
 };
 
 template<typename T>
-struct TOnComponentInitialized<T, GS_TYPE_TRAITS::VoidType<decltype(&T::SetOnComponentInitializedDelegate)>>
+struct TOnComponentInitialized<T, VoidType<decltype(&T::SetOnComponentInitializedDelegate)>>
 {
 	static constexpr bool bNeedInit = false;
 	static void Bind()

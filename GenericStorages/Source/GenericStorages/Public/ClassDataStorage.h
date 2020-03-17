@@ -29,16 +29,6 @@ THE SOFTWARE.
 
 namespace ClassStorage
 {
-// Init Once
-template<typename Type>
-bool TrueOnFirstCall(const Type&)
-{
-	static bool bValue = true;
-	bool Result = bValue;
-	bValue = false;
-	return Result;
-}
-
 // each type (USTRUCT or UCLASS) would has a storage place in the type-tree for lookup fast
 template<typename T>
 struct TClassStorageImpl
