@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.9",
+	"FriendlyName": "GenericStorages",
+	"Description": "GenericStorages Utilities",
+	"Category": "Core",
+	"CreatedBy": "wangjieest",
+	"CreatedByURL": "",
+	"MarketplaceURL": "",
+	"DocsURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GenericStorages",
+			"Type": "Runtime",
+			"LoadingPhase": "PreDefault",
+			"BlacklistPlatforms": []
+		}
+	]
+}
