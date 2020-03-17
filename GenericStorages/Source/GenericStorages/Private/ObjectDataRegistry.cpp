@@ -206,8 +206,8 @@ DEFINE_FUNCTION(UObjectDataRegisterUtil::execGetObjectData)
 	P_GET_UBOOL(bWriteData);
 	P_GET_UBOOL_REF(bSucc);
 	Stack.MostRecentProperty = nullptr;
-	Stack.StepCompiledIn<UStructProperty>(nullptr);
-	if (auto Prop = Cast<UStructProperty>(Stack.MostRecentProperty))
+	Stack.StepCompiledIn<FStructProperty>(nullptr);
+	if (auto Prop = CastProp<FStructProperty>(Stack.MostRecentProperty))
 	{
 		auto& Mgr = ObjectDataRegistry::GetStorage(true);
 		void* Ptr = Mgr->GetObjectData(Obj, Prop->Struct->GetFName());
@@ -247,8 +247,8 @@ DEFINE_FUNCTION(UObjectDataRegisterUtil::execDeleteObjectData)
 {
 	P_GET_OBJECT(UObject, Obj);
 	Stack.MostRecentProperty = nullptr;
-	Stack.StepCompiledIn<UStructProperty>(nullptr);
-	if (auto Prop = Cast<UStructProperty>(Stack.MostRecentProperty))
+	Stack.StepCompiledIn<FStructProperty>(nullptr);
+	if (auto Prop = CastProp<FStructProperty>(Stack.MostRecentProperty))
 	{
 		if (auto& Mgr = ObjectDataRegistry::GetStorage())
 			Mgr->RemoveObjectData(Obj, Prop->Struct->GetFName());

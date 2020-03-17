@@ -73,7 +73,7 @@ FName GetPropertyName(FProperty* InProperty)
 		DEF_PAIR_CELL(FStrProperty),
 		DEF_PAIR_CELL(FNameProperty),
 		DEF_PAIR_CELL(FTextProperty),
-		DEF_PAIR_CELL_CUSTOM(UEnumProperty, GetPropertyName(CastProp<FEnumProperty>(Property)->GetUnderlyingProperty())),
+		DEF_PAIR_CELL_CUSTOM(FEnumProperty, GetPropertyName(CastProp<FEnumProperty>(Property)->GetUnderlyingProperty())),
 		DEF_PAIR_CELL(FLazyObjectProperty),
 		DEF_PAIR_CELL(FSoftObjectProperty),
 		DEF_PAIR_CELL(FWeakObjectProperty),
