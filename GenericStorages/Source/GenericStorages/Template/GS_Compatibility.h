@@ -115,6 +115,7 @@ using FUnsizedIntProperty = UE4Types_Private::TIntegerPropertyMapping<signed int
 using FUnsizedUIntProperty = UE4Types_Private::TIntegerPropertyMapping<unsigned int>::Type;
 
 #	if ENGINE_MINOR_VERSION < 25
+using FFieldPropertyType = UObject;
 using FFieldClass = UClass;
 using FField = UField;
 
@@ -124,6 +125,7 @@ using FProperty = UProperty;
 using FBoolProperty = UBoolProperty;
 #		define CASTCLASS_FBoolProperty CASTCLASS_UBoolProperty
 
+using FNumericProperty = UNumericProperty;
 #		define CASTCLASS_FNumericProperty CASTCLASS_UNumericProperty
 using FInt8Property = UInt8Property;
 #		define CASTCLASS_FInt8Property CASTCLASS_UInt8Property
@@ -223,17 +225,21 @@ template<typename T>
 struct TFieldPath
 {
 public:
-	TFieldPath(T* InField = nullptr)
-		: Field(InField)
+	TFieldPath(const T* InField = nullptr)
+		: Field(const_cast<T*>(InField))
+	{
+	}
+	TFieldPath(T& InField)
+		: Field(&InField)
 	{
 	}
 
-	void operator=(T* InField) { Field = InField; }
+	void operator=(const T* InField) { Field = const_cast<T*>(InField); }
 
 	T* operator*() const { return Field; }
 	T* operator->() const { return Field; }
 
-	explicit bool operator bool() const { return !!Field; }
+	explicit operator bool() const { return !!Field; }
 	T* Get() const { return Field; }
 	T& GetOwnerVariant() const { return *Field; }
 	UClass* GetOwnerClass() const { return GetFieldOwnerClass(Field); }
@@ -261,7 +267,7 @@ FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
 }
 FORCEINLINE const FString& GetFieldName(FProperty* Prop)
 {
-	return Prop->GetOwner()->GetName();
+	return Prop->GetOuter()->GetName();
 }
 
 #	else  // not (ENGINE_MINOR_VERSION < 25)
@@ -269,6 +275,8 @@ FORCEINLINE const FString& GetFieldName(FProperty* Prop)
 //////////////////////////////////////////////////////////////////////////
 
 #		include "UObject/FieldPath.h"
+using FFieldPropertyType = FProperty;
+
 FORCEINLINE EClassCastFlags GetPropCastFlags(FProperty* Prop)
 {
 	return (EClassCastFlags)Prop->GetCastFlags();
