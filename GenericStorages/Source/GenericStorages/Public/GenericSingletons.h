@@ -25,7 +25,7 @@ THE SOFTWARE.
 #pragma once
 #include "CoreMinimal.h"
 
-#include "GS_Compatibility.h"
+#include "UnrealCompatibility.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Launch/Resources/Version.h"
 #include "UObject/Class.h"

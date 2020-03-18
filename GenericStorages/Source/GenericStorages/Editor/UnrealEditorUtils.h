@@ -55,20 +55,20 @@ class UObject;
 class UDataTable;
 
 #	if ENGINE_MINOR_VERSION >= 22
-using EGSPropertyClass = UE4CodeGen_Private::EPropertyGenFlags;
+using EPropertyClass = UE4CodeGen_Private::EPropertyGenFlags;
 #	else
-using EGSPropertyClass = UE4CodeGen_Private::EPropertyClass;
+using EPropertyClass = UE4CodeGen_Private::EPropertyClass;
 #	endif
 
-namespace GS_EditorUtils
+namespace UnrealEditorUtils
 {
 template<typename T>
 FORCEINLINE FName GetPropertyName()
 {
-	return TClass2Name<T>::GetName();
+	return GS_CLASS_TO_NAME::TClass2Name<T>::GetName();
 }
 GENERICSTORAGES_API FName GetPropertyName(FProperty* Property);
-GENERICSTORAGES_API FName GetPropertyName(FProperty* Property, EGSPropertyClass PropertyEnum, EGSPropertyClass ValueEnum = (EGSPropertyClass)-1, EGSPropertyClass KeyEnum = (EGSPropertyClass)-1);
+GENERICSTORAGES_API FName GetPropertyName(FProperty* Property, EPropertyClass PropertyEnum, EPropertyClass ValueEnum = (EPropertyClass)-1, EPropertyClass KeyEnum = (EPropertyClass)-1);
 
 template<typename T>
 T* GetPropertyHandleUObjectValue(TSharedPtr<IPropertyHandle> PropertyHandle)
@@ -138,8 +138,8 @@ class GENERICSTORAGES_API FScopedPropertyTransaction
 {
 public:
 	FScopedPropertyTransaction(const TSharedPtr<IPropertyHandle>& InPropertyHandle,
-							   const FText& SessionName = NSLOCTEXT("GS_EditorUtils", "ScopedTransaction", "ScopedTransaction"),
-							   const TCHAR* TransactionContext = TEXT("GS_EditorUtils"));
+							   const FText& SessionName = NSLOCTEXT("UnrealEditorUtils", "ScopedTransaction", "ScopedTransaction"),
+							   const TCHAR* TransactionContext = TEXT("UnrealEditorUtils"));
 	~FScopedPropertyTransaction();
 
 protected:
@@ -155,6 +155,6 @@ GENERICSTORAGES_API bool EditorAsyncLoad(UClass* Type, const FString& Dir = TEXT
 
 GENERICSTORAGES_API bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bInTemplate = false, bool bInContainer = false);
 GENERICSTORAGES_API FString GetDefaultValueOnType(const FEdGraphPinType& PinType);
-}  // namespace GS_EditorUtils
+}  // namespace UnrealEditorUtils
 
 #endif

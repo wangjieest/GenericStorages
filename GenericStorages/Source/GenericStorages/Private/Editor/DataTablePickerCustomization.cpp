@@ -64,7 +64,7 @@ void FDataTablePickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		RootPropertyHandle = PropertyHandle;
 		auto OuterObject = OuterObjects[0];
 
-		auto OrignalPtr = GS_EditorUtils::GetStructPropertyAddress<FDataTablePicker>(PropertyHandle, OuterObject);
+		auto OrignalPtr = UnrealEditorUtils::GetStructPropertyAddress<FDataTablePicker>(PropertyHandle, OuterObject);
 		check(OrignalPtr);
 
 		StructTypePicker.Init(PropertyHandle);
@@ -105,7 +105,7 @@ void FDataTablePathPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHand
 		RootPropertyHandle = PropertyHandle;
 		auto OuterObject = OuterObjects[0];
 
-		auto OrignalPtr = GS_EditorUtils::GetStructPropertyAddress<FDataTablePathPicker>(PropertyHandle, OuterObject);
+		auto OrignalPtr = UnrealEditorUtils::GetStructPropertyAddress<FDataTablePathPicker>(PropertyHandle, OuterObject);
 		check(OrignalPtr);
 
 		StructTypePicker.Init(PropertyHandle);
@@ -145,7 +145,7 @@ inline void FDataTableRowNamePickerCustomization::PostChange(const UDataTable* C
 #	if WITH_EDITORONLY_DATA
 	if (auto ThisProperty = RootPropertyHandle.Pin())
 	{
-		if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
+		if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
 		{
 			if (Changed && (Changed == Ptr->DataTablePath.Get()) && (FDataTableEditorUtils::EDataTableChangeInfo::RowList == Info))
 			{
@@ -165,7 +165,7 @@ void FDataTableRowNamePickerCustomization::CustomizeHeader(TSharedRef<IPropertyH
 	{
 		RootPropertyHandle = PropertyHandle;
 		auto OuterObject = OuterObjects[0];
-		auto* OrignalPtr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(PropertyHandle, OuterObject);
+		auto* OrignalPtr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(PropertyHandle, OuterObject);
 		check(OrignalPtr);
 		TSharedPtr<FName> CurrentlySelectedName;
 		if (auto Table = OrignalPtr->DataTablePath.Get())
@@ -187,10 +187,10 @@ void FDataTableRowNamePickerCustomization::CustomizeHeader(TSharedRef<IPropertyH
 		StructTypePicker.OnChanged.BindLambda([this] {
 			if (auto ThisProperty = RootPropertyHandle.Pin())
 			{
-				if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
+				if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
 				{
 					{
-						GS_EditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
+						UnrealEditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
 						Ptr->RowName = NAME_None;
 #	if WITH_EDITORONLY_DATA
 						Ptr->DataTablePath = nullptr;
@@ -243,11 +243,11 @@ void FDataTableRowNamePickerCustomization::ComboBoxSelectionChanged(TSharedPtr<F
 	FName Name = NameItem.IsValid() ? *NameItem : NAME_None;
 	if (auto ThisProperty = RootPropertyHandle.Pin())
 	{
-		if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
+		if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowNamePicker>(ThisProperty))
 		{
 			if (Ptr->RowName != Name)
 			{
-				GS_EditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
+				UnrealEditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
 				Ptr->RowName = Name;
 				TArray<UObject*> OuterObjects;
 				ThisProperty->GetOuterObjects(OuterObjects);
@@ -276,7 +276,7 @@ inline void FDataTableRowPickerCustomization::PostChange(const UDataTable* Chang
 {
 	if (auto ThisProperty = RootPropertyHandle.Pin())
 	{
-		if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
+		if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
 		{
 			if (Changed && (Changed == Ptr->DataTable) && (FDataTableEditorUtils::EDataTableChangeInfo::RowList == Info))
 			{
@@ -295,7 +295,7 @@ void FDataTableRowPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandl
 	{
 		RootPropertyHandle = PropertyHandle;
 		auto OuterObject = OuterObjects[0];
-		FDataTableRowPicker* OrignalPtr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(PropertyHandle, OuterObject);
+		FDataTableRowPicker* OrignalPtr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(PropertyHandle, OuterObject);
 		check(OrignalPtr);
 		TSharedPtr<FName> CurrentlySelectedName;
 		if (auto Table = OrignalPtr->DataTable)
@@ -317,10 +317,10 @@ void FDataTableRowPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandl
 		StructTypePicker.OnChanged.BindLambda([this] {
 			if (auto ThisProperty = RootPropertyHandle.Pin())
 			{
-				if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
+				if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
 				{
 					{
-						GS_EditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
+						UnrealEditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
 						Ptr->DataTable = nullptr;
 						Ptr->RowName = NAME_None;
 					}
@@ -372,11 +372,11 @@ void FDataTableRowPickerCustomization::ComboBoxSelectionChanged(TSharedPtr<FName
 	FName Name = NameItem.IsValid() ? *NameItem : NAME_None;
 	if (auto ThisProperty = RootPropertyHandle.Pin())
 	{
-		if (auto Ptr = GS_EditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
+		if (auto Ptr = UnrealEditorUtils::GetStructPropertyAddress<FDataTableRowPicker>(ThisProperty))
 		{
 			if (Ptr->RowName != Name)
 			{
-				GS_EditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
+				UnrealEditorUtils::FScopedPropertyTransaction Scoped(ThisProperty);
 				Ptr->RowName = Name;
 				TArray<UObject*> OuterObjects;
 				ThisProperty->GetOuterObjects(OuterObjects);

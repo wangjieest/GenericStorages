@@ -32,31 +32,12 @@ THE SOFTWARE.
 
 #	include <type_traits>
 
-// void_t
-template<typename... T>
-struct MakeVoid
-{
-	using type = void;
-};
-template<typename... T>
-using VoidType = typename MakeVoid<T...>::type;
-
-// Init Once
-template<typename Type>
-bool TrueOnFirstCall(const Type&)
-{
-	static bool bValue = true;
-	bool Result = bValue;
-	bValue = false;
-	return Result;
-}
-
 #	if ENGINE_MINOR_VERSION <= 20
 namespace ITS
 {
-	template<typename E>
-	using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
-	/*
+template<typename E>
+using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
+/*
 	GCC:
 	void foo() [with T = {type}]
 	clang:
@@ -66,29 +47,29 @@ namespace ITS
 	*/
 #		if defined(_MSC_VER)
 #			define Z_TEMPLATE_PARAMETER_NAME_ __FUNCSIG__
-	constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
-	constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
+constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
+constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
 #		else
 #			define Z_TEMPLATE_PARAMETER_NAME_ __PRETTY_FUNCTION__
 #			if defined(__clang__)
-	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
-	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
+constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			else
-	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
-	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
+constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			endif
 #		endif
 
-	template<typename EnumType>
-	static const char* TypeStr(void)
-	{
-		static_assert(std::is_enum<EnumType>::value, "err");
-		constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
-		static char typeName[size] = {};
-		memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
+template<typename EnumType>
+static const char* TypeStr(void)
+{
+	static_assert(std::is_enum<EnumType>::value, "err");
+	constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
+	static char typeName[size] = {};
+	memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
 
-		return typeName;
-	}
+	return typeName;
+}
 }  // namespace ITS
 
 template<typename EnumType>
@@ -308,4 +289,168 @@ FORCEINLINE const FString& GetFieldName(FProperty* Prop)
 	return Prop->GetOwnerVariant().GetName();
 }
 #	endif
+
+#	if ENGINE_MINOR_VERSION < 24
+#		define UE_ARRAY_COUNT ARRAY_COUNT
+#	endif
+
+#	if ENGINE_MINOR_VERSION < 23
+#		include "DelegateInstanceInterface.h"
+#		include "Templates/SharedPointer.h"
+#		include "Templates/TypeWrapper.h"
+#		include "Templates/UnrealTemplate.h"
+
+#		define UE_DEPRECATED(VERSION, MESSAGE) DEPRECATED(VERSION, MESSAGE)
+
+/**
+ * Implements a weak object delegate binding for C++ functors, e.g. lambdas.
+ */
+template<typename UserClass, typename FuncType, typename FunctorType, typename... VarTypes>
+class TWeakBaseFunctorDelegateInstance;
+
+template<typename UserClass, typename WrappedRetValType, typename... ParamTypes, typename FunctorType, typename... VarTypes>
+class TWeakBaseFunctorDelegateInstance<UserClass, WrappedRetValType(ParamTypes...), FunctorType, VarTypes...> : public IBaseDelegateInstance<typename TUnwrapType<WrappedRetValType>::Type(ParamTypes...)>
+{
+public:
+	typedef typename TUnwrapType<WrappedRetValType>::Type RetValType;
+
+private:
+	static_assert(TAreTypesEqual<FunctorType, typename TRemoveReference<FunctorType>::Type>::Value, "FunctorType cannot be a reference");
+
+	typedef IBaseDelegateInstance<typename TUnwrapType<WrappedRetValType>::Type(ParamTypes...)> Super;
+	typedef TWeakBaseFunctorDelegateInstance<UserClass, RetValType(ParamTypes...), FunctorType, VarTypes...> UnwrappedThisType;
+
+public:
+	TWeakBaseFunctorDelegateInstance(UserClass* InContextObject, const FunctorType& InFunctor, VarTypes... Vars)
+		: ContextObject(InContextObject)
+		, Functor(InFunctor)
+		, Payload(Vars...)
+		, Handle(FDelegateHandle::GenerateNewHandle)
+	{
+	}
+
+	TWeakBaseFunctorDelegateInstance(UserClass* InContextObject, FunctorType&& InFunctor, VarTypes... Vars)
+		: ContextObject(InContextObject)
+		, Functor(MoveTemp(InFunctor))
+		, Payload(Vars...)
+		, Handle(FDelegateHandle::GenerateNewHandle)
+	{
+	}
+
+	// IDelegateInstance interface
+
+#		if USE_DELEGATE_TRYGETBOUNDFUNCTIONNAME
+
+	virtual FName TryGetBoundFunctionName() const override final { return NAME_None; }
+
+#		endif
+
+	virtual UObject* GetUObject() const override final { return ContextObject.Get(); }
+
+	// virtual const void* GetObjectForTimerManager() const final { return ContextObject.Get(); }
+	// virtual uint64 GetBoundProgramCounterForTimerManager() const final { return 0; }
+
+	// Deprecated
+	virtual bool HasSameObject(const void* InContextObject) const override final { return GetUObject() == InContextObject; }
+
+	virtual bool IsCompactable() const override final { return !ContextObject.Get(true); }
+
+	virtual bool IsSafeToExecute() const override final { return ContextObject.IsValid(); }
+
+public:
+	// IBaseDelegateInstance interface
+	virtual void CreateCopy(FDelegateBase& Base) override final { new (Base) UnwrappedThisType(*(UnwrappedThisType*)this); }
+
+	virtual RetValType Execute(ParamTypes... Params) const override final { return Payload.ApplyAfter(Functor, Params...); }
+
+	virtual FDelegateHandle GetHandle() const override final { return Handle; }
+
+public:
+	/**
+	 * Creates a new static function delegate binding for the given function pointer.
+	 *
+	 * @param InFunctor C++ functor
+	 * @return The new delegate.
+	 */
+	FORCEINLINE static void Create(FDelegateBase& Base, UserClass* InContextObject, const FunctorType& InFunctor, VarTypes... Vars) { new (Base) UnwrappedThisType(InContextObject, InFunctor, Vars...); }
+	FORCEINLINE static void Create(FDelegateBase& Base, UserClass* InContextObject, FunctorType&& InFunctor, VarTypes... Vars) { new (Base) UnwrappedThisType(InContextObject, MoveTemp(InFunctor), Vars...); }
+
+private:
+	// Context object - the validity of this object controls the validity of the lambda
+	TWeakObjectPtr<UserClass> ContextObject;
+
+	// C++ functor
+	// We make this mutable to allow mutable lambdas to be bound and executed.  We don't really want to
+	// model the Functor as being a direct subobject of the delegate (which would maintain transivity of
+	// const - because the binding doesn't affect the substitutability of a copied delegate.
+	mutable typename TRemoveConst<FunctorType>::Type Functor;
+
+	// Payload member variables, if any.
+	TTuple<VarTypes...> Payload;
+
+	// The handle of this delegate
+	FDelegateHandle Handle;
+};
+
+template<typename UserClass, typename FunctorType, typename... ParamTypes, typename... VarTypes>
+class TWeakBaseFunctorDelegateInstance<UserClass, void(ParamTypes...), FunctorType, VarTypes...> : public TWeakBaseFunctorDelegateInstance<UserClass, TTypeWrapper<void>(ParamTypes...), FunctorType, VarTypes...>
+{
+	typedef TWeakBaseFunctorDelegateInstance<UserClass, TTypeWrapper<void>(ParamTypes...), FunctorType, VarTypes...> Super;
+
+public:
+	/**
+	 * Creates and initializes a new instance.
+	 *
+	 * @param InFunctor C++ functor
+	 */
+	TWeakBaseFunctorDelegateInstance(UserClass* InContextObject, const FunctorType& InFunctor, VarTypes... Vars)
+		: Super(InContextObject, InFunctor, Vars...)
+	{
+	}
+
+	TWeakBaseFunctorDelegateInstance(UserClass* InContextObject, FunctorType&& InFunctor, VarTypes... Vars)
+		: Super(InContextObject, MoveTemp(InFunctor), Vars...)
+	{
+	}
+
+	virtual bool ExecuteIfSafe(ParamTypes... Params) const override final
+	{
+		if (Super::IsSafeToExecute())
+		{
+			Super::Execute(Params...);
+			return true;
+		}
+
+		return false;
+	}
+};
+#	endif
+
+// void_t
+template<typename... T>
+struct MakeVoid
+{
+	using type = void;
+};
+template<typename... T>
+using VoidType = typename MakeVoid<T...>::type;
+
+// Init Once
+template<typename Type>
+bool TrueOnFirstCall(const Type&)
+{
+	static bool bValue = true;
+	bool Result = bValue;
+	bValue = false;
+	return Result;
+}
+
+// CreateWeakLabmda
+template<typename DelegateType, typename UserClass, typename FunctorType, typename... VarTypes>
+inline DelegateType CreateWeakLambda(UserClass* InUserObject, FunctorType&& InFunctor, VarTypes... Vars)
+{
+	DelegateType Result;
+	TWeakBaseFunctorDelegateInstance<UserClass, typename DelegateType::TFuncType, typename TRemoveReference<FunctorType>::Type, VarTypes...>::Create(Result, InUserObject, Forward<FunctorType>(InFunctor), Vars...);
+	return Result;
+}
 #endif

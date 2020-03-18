@@ -45,7 +45,7 @@ UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
 	FString FailureReason;
 	if (TypeName.Contains(TEXT(" ")))
 	{
-		FailureReason = FString::Printf(TEXT("typename contains space"));
+		FailureReason = FString::Printf(TEXT("contains a space."));
 		bIsValidName = false;
 	}
 	else if (!FPackageName::IsShortPackageName(TypeName))
@@ -71,12 +71,13 @@ UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
 		}
 	}
 
+	UObject* NewReflection = nullptr;
 	if (bIsValidName)
 	{
-		UObject* NewReflection = nullptr;
+		UObject* ClassPackage = ANY_PACKAGE;
 		if (FPackageName::IsShortPackageName(TypeName))
 		{
-			NewReflection = StaticFindObject(TypeClass, ANY_PACKAGE, *TypeName);
+			NewReflection = StaticFindObject(TypeClass, ClassPackage, *TypeName);
 		}
 		else
 		{
@@ -85,15 +86,17 @@ UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
 
 		if (!NewReflection)
 		{
-			FailureReason = TEXT("failed to find class");
+			if (UObjectRedirector* RenamedClassRedirector = FindObject<UObjectRedirector>(ClassPackage, *TypeName))
+			{
+				NewReflection = RenamedClassRedirector->DestinationObject;
+			}
 		}
-		else
-		{
-			return NewReflection;
-		}
+
+		if (!NewReflection)
+			FailureReason = TEXT("Failed to find class.");
 	}
 
-	return nullptr;
+	return NewReflection;
 }
 
 UGenericSingletons* GetManager(UWorld* World, bool bEnsure)

@@ -29,7 +29,7 @@ THE SOFTWARE.
 #	include "CoreUObject.h"
 
 #	include "DataTableEditorUtils.h"
-#	include "GS_EditorUtils.h"
+#	include "UnrealEditorUtils.h"
 #	include "IDetailCustomization.h"
 #	include "IPropertyTypeCustomization.h"
 #	include "Templates/SubclassOf.h"
@@ -45,7 +45,7 @@ protected:
 	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) override {}
 
 	TWeakPtr<IPropertyHandle> RootPropertyHandle;
-	GS_EditorUtils::FDatatableTypePicker StructTypePicker;
+	UnrealEditorUtils::FDatatableTypePicker StructTypePicker;
 };
 
 class FDataTablePathPickerCustomization : public IPropertyTypeCustomization
@@ -58,7 +58,7 @@ protected:
 	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) override {}
 
 	TWeakPtr<IPropertyHandle> RootPropertyHandle;
-	GS_EditorUtils::FDatatableTypePicker StructTypePicker;
+	UnrealEditorUtils::FDatatableTypePicker StructTypePicker;
 };
 
 class FDataTableRowNamePickerCustomization
@@ -81,7 +81,7 @@ protected:
 	void PreloadObject(UObject* ReferencedObject);
 	FString ObjectPath;
 	TWeakPtr<IPropertyHandle> RootPropertyHandle;
-	GS_EditorUtils::FDatatableTypePicker StructTypePicker;
+	UnrealEditorUtils::FDatatableTypePicker StructTypePicker;
 };
 
 class FDataTableRowPickerCustomization
@@ -106,6 +106,6 @@ protected:
 	void PreloadObject(UObject* ReferencedObject);
 	FString ObjectPath;
 	TWeakPtr<IPropertyHandle> RootPropertyHandle;
-	GS_EditorUtils::FDatatableTypePicker StructTypePicker;
+	UnrealEditorUtils::FDatatableTypePicker StructTypePicker;
 };
 #endif

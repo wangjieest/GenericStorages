@@ -28,10 +28,9 @@ THE SOFTWARE.
 #if WITH_EDITOR
 #	include "PropertyEditorDelegates.h"
 #	include "PropertyEditorModule.h"
+#	include "Editor/DataTablePickerCustomization.h"
+#	include "Editor/SClassPickerGraphPin.h"
 #endif
-
-#include "DataTablePickerCustomization.h"
-#include "SClassPickerGraphPin.h"
 
 class FGenericStoragesPlugin final : public IModuleInterface
 {
@@ -74,8 +73,8 @@ public:
 			PropertyModule->RegisterCustomPropertyTypeLayout("DataTableRowNamePicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDataTableRowNamePickerCustomization::MakeInstance));
 			PropertyModule->RegisterCustomPropertyTypeLayout("DataTableRowPicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDataTableRowPickerCustomization::MakeInstance));
 			PropertyModule->NotifyCustomizationModuleChanged();
-#endif
 		}
+#endif
 	}
 
 	virtual void ShutdownModule() override {}

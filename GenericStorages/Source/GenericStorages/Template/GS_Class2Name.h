@@ -510,7 +510,7 @@ struct TClass2NameImpl<T, TTraitsTemplate<void>::dispatch_value>
 		return name;
 	}
 };
+template<typename T>
+using TClass2Name = TClass2NameImpl<std::remove_cv_t<std::remove_reference_t<T>>>;
 }  // namespace GS_CLASS_TO_NAME
 
-template<typename T>
-using TClass2Name = GS_CLASS_TO_NAME::TClass2NameImpl<std::remove_cv_t<std::remove_reference_t<T>>>;

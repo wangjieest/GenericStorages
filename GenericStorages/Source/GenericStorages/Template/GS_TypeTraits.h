@@ -23,7 +23,7 @@ THE SOFTWARE.
 ****************************************************************************/
 
 #pragma once
-#include "GS_Compatibility.h"
+#include "UnrealCompatibility.h"
 
 #include <tuple>
 

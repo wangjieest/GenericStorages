@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ****************************************************************************/
 
-#include "GS_EditorUtils.h"
+#include "UnrealEditorUtils.h"
 
 #if WITH_EDITOR
 #	include "ARFilter.h"
@@ -47,7 +47,7 @@ THE SOFTWARE.
 #	include "Widgets/Notifications/SNotificationList.h"
 #	include "GenericSingletons.h"
 
-namespace GS_EditorUtils
+namespace UnrealEditorUtils
 {
 FName GetPropertyName(FProperty* InProperty)
 {
@@ -187,14 +187,14 @@ FName GetPropertyName(FProperty* InProperty)
 	return NAME_None;
 }
 
-FName GetPropertyName(FProperty* InProperty, EGSPropertyClass PropertyEnum, EGSPropertyClass ValueEnum, EGSPropertyClass KeyEnum)
+FName GetPropertyName(FProperty* InProperty, EPropertyClass PropertyEnum, EPropertyClass ValueEnum, EPropertyClass KeyEnum)
 {
-	using KeyType = EGSPropertyClass;
-	using ValueType = FName (*)(FProperty * Property, EGSPropertyClass, EGSPropertyClass);
+	using KeyType = EPropertyClass;
+	using ValueType = FName (*)(FProperty * Property, EPropertyClass, EPropertyClass);
 #	define DEF_PAIR_CELL(Index) \
-		TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EGSPropertyClass InValueEnum, EGSPropertyClass InKeyEnum) { return GetPropertyName<typename F##Index##Property ::TCppType>(); })
+		TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EPropertyClass InValueEnum, EPropertyClass InKeyEnum) { return GetPropertyName<typename F##Index##Property ::TCppType>(); })
 
-#	define DEF_PAIR_CELL_CUSTOM(Index, ...) TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EGSPropertyClass InValueEnum, EGSPropertyClass InKeyEnum) { return __VA_ARGS__; })
+#	define DEF_PAIR_CELL_CUSTOM(Index, ...) TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EPropertyClass InValueEnum, EPropertyClass InKeyEnum) { return __VA_ARGS__; })
 
 	static TMap<KeyType, ValueType> DispatchMap{
 		//
@@ -1015,5 +1015,5 @@ FScopedPropertyTransaction::~FScopedPropertyTransaction()
 	PropertyHandle->NotifyFinishedChangingProperties();
 }
 
-}  // namespace GS_EditorUtils
+}  // namespace UnrealEditorUtils
 #endif
