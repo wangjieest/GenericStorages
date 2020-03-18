@@ -80,12 +80,12 @@ protected:
 	mutable bool bEnableAdd = true;
 
 	//////////////////////////////////////////////////////////////////////////
-	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class)
+	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class, bool bEnsure = true)
 	{
 #if !UE_BUILD_SHIPPING
 		UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::Add %s"), *Class->GetName());
 #endif
-		if (!ensureAlwaysMsgf(bEnableAdd, TEXT("TClassDataStorage cannot add data anymore")))
+		if (bEnsure && !ensureAlwaysMsgf(bEnableAdd, TEXT("TClassDataStorage cannot add data anymore")))
 			return nullptr;
 
 		auto& Ptr = Regs.FindOrAdd(Class);
@@ -221,19 +221,19 @@ public:
 		return Keys;
 	}
 	template<typename F /*void(T&)*/>
-	void ModifyData(const UStruct* Class, bool bPersistent, const F& Fun)
+	void ModifyData(const UStruct* Class, bool bPersistent, const F& Fun, bool bPrompt = true)
 	{
 		if (ensureAlways(Class))
 		{
 			if (bPersistent)
 			{
-				if (auto DataPtr = Add(PersistentData, Class))
+				if (auto DataPtr = Add(PersistentData, Class, bPrompt))
 				{
 					Fun((*DataPtr)->Data);
 				}
 			}
 
-			if (auto DataPtr = Add(RegisteredData, Class))
+			if (auto DataPtr = Add(RegisteredData, Class, bPrompt))
 			{
 				Fun((*DataPtr)->Data);
 				FastLookupTable.FindOrAdd(Class) = *DataPtr;
