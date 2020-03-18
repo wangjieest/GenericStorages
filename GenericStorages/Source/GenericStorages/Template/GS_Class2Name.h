@@ -26,6 +26,7 @@ THE SOFTWARE.
 #include "CoreMinimal.h"
 
 #include "Containers/EnumAsByte.h"
+#include "GS_TypeTraits.h"
 #include "HAL/PlatformAtomics.h"
 #include "Misc/AssertionMacros.h"
 #include "Runtime/GameplayTasks/Public/GameplayTaskTypes.h"
@@ -36,7 +37,6 @@ THE SOFTWARE.
 #include "UObject/ScriptInterface.h"
 #include "UObject/SoftObjectPtr.h"
 #include "UObject/WeakObjectPtr.h"
-#include "GS_TypeTraits.h"
 
 #if !defined(GS_CLASS_TO_NAME)
 #	define GS_CLASS_TO_NAME GS_Class2Name
@@ -56,7 +56,7 @@ namespace GS_CLASS_TO_NAME
 	};
 // clang-format on
 
-#define US_MANUAL_GENERATE_NAME(TYPE, NAME)                              \
+#define GS_MANUAL_GENERATE_NAME(TYPE, NAME)                              \
 	template<>                                                           \
 	struct TManualGeneratedName<TYPE>                                    \
 	{                                                                    \
@@ -69,34 +69,34 @@ namespace GS_CLASS_TO_NAME
 
 // base props
 
-#define US_MANUAL_NAME_OF(Class) US_MANUAL_GENERATE_NAME(Class, #Class)
-US_MANUAL_NAME_OF(char)
-US_MANUAL_NAME_OF(wchar_t)
-US_MANUAL_NAME_OF(bool)
-US_MANUAL_NAME_OF(int8)
-US_MANUAL_NAME_OF(uint8)
-US_MANUAL_NAME_OF(int16)
-US_MANUAL_NAME_OF(uint16)
-US_MANUAL_NAME_OF(int32)
-US_MANUAL_NAME_OF(uint32)
-US_MANUAL_NAME_OF(int64)
-US_MANUAL_NAME_OF(uint64)
-US_MANUAL_NAME_OF(float)
-US_MANUAL_NAME_OF(double)
-#undef US_MANUAL_NAME_OF
+#define GS_MANUAL_NAME_OF(Class) GS_MANUAL_GENERATE_NAME(Class, #Class)
+GS_MANUAL_NAME_OF(char)
+GS_MANUAL_NAME_OF(wchar_t)
+GS_MANUAL_NAME_OF(bool)
+GS_MANUAL_NAME_OF(int8)
+GS_MANUAL_NAME_OF(uint8)
+GS_MANUAL_NAME_OF(int16)
+GS_MANUAL_NAME_OF(uint16)
+GS_MANUAL_NAME_OF(int32)
+GS_MANUAL_NAME_OF(uint32)
+GS_MANUAL_NAME_OF(int64)
+GS_MANUAL_NAME_OF(uint64)
+GS_MANUAL_NAME_OF(float)
+GS_MANUAL_NAME_OF(double)
+#undef GS_MANUAL_NAME_OF
 
 // custom def
-#define US_MANUAL_NAME_OF(Class)               \
+#define GS_MANUAL_NAME_OF(Class)               \
 	namespace GS_CLASS_TO_NAME                 \
 	{                                          \
-		US_MANUAL_GENERATE_NAME(Class, #Class) \
+		GS_MANUAL_GENERATE_NAME(Class, #Class) \
 	}
 
-US_MANUAL_GENERATE_NAME(FString, "String")
-US_MANUAL_GENERATE_NAME(FName, "Name")
-US_MANUAL_GENERATE_NAME(FText, "Text")
+GS_MANUAL_GENERATE_NAME(FString, "String")
+GS_MANUAL_GENERATE_NAME(FName, "Name")
+GS_MANUAL_GENERATE_NAME(FText, "Text")
 
-US_MANUAL_GENERATE_NAME(UObject, "Object")
+GS_MANUAL_GENERATE_NAME(UObject, "Object")
 
 // THasBaseStructure
 template<typename T>
@@ -107,8 +107,8 @@ struct THasBaseStructure
 		value = 0,
 	};
 };
-#define US_MANUAL_GENERATE_STRUCT_NAME(TYPE, NAME) \
-	US_MANUAL_GENERATE_NAME(TYPE, NAME)            \
+#define GS_MANUAL_GENERATE_STRUCT_NAME(TYPE, NAME) \
+	GS_MANUAL_GENERATE_NAME(TYPE, NAME)            \
 	template<>                                     \
 	struct THasBaseStructure<TYPE>                 \
 	{                                              \
@@ -119,31 +119,31 @@ struct THasBaseStructure
 	};
 
 // provided by TBaseStructure
-US_MANUAL_GENERATE_STRUCT_NAME(FRotator, "Rotator")
-US_MANUAL_GENERATE_STRUCT_NAME(FQuat, "Quat")
-US_MANUAL_GENERATE_STRUCT_NAME(FTransform, "Transform")
-US_MANUAL_GENERATE_STRUCT_NAME(FLinearColor, "LinearColor")
-US_MANUAL_GENERATE_STRUCT_NAME(FColor, "Color")
-US_MANUAL_GENERATE_STRUCT_NAME(FPlane, "Plane")
-US_MANUAL_GENERATE_STRUCT_NAME(FVector, "Vector")
-US_MANUAL_GENERATE_STRUCT_NAME(FVector2D, "Vector2D")
-US_MANUAL_GENERATE_STRUCT_NAME(FVector4, "Vector4")
-US_MANUAL_GENERATE_STRUCT_NAME(FRandomStream, "RandomStream")
-US_MANUAL_GENERATE_STRUCT_NAME(FGuid, "Guid")
-US_MANUAL_GENERATE_STRUCT_NAME(FBox2D, "Box2D")
-US_MANUAL_GENERATE_STRUCT_NAME(FFallbackStruct, "FallbackStruct")
-US_MANUAL_GENERATE_STRUCT_NAME(FFloatRangeBound, "FloatRangeBound")
-US_MANUAL_GENERATE_STRUCT_NAME(FFloatRange, "FloatRange")
-US_MANUAL_GENERATE_STRUCT_NAME(FInt32RangeBound, "Int32RangeBound")
-US_MANUAL_GENERATE_STRUCT_NAME(FInt32Range, "Int32Range")
-US_MANUAL_GENERATE_STRUCT_NAME(FFloatInterval, "FloatInterval")
-US_MANUAL_GENERATE_STRUCT_NAME(FInt32Interval, "Int32Interval")
-US_MANUAL_GENERATE_STRUCT_NAME(FSoftObjectPath, "SoftObjectPath")
-US_MANUAL_GENERATE_STRUCT_NAME(FSoftClassPath, "SoftClassPath")
-US_MANUAL_GENERATE_STRUCT_NAME(FPrimaryAssetType, "PrimaryAssetType")
-US_MANUAL_GENERATE_STRUCT_NAME(FPrimaryAssetId, "PrimaryAssetId")
-US_MANUAL_GENERATE_STRUCT_NAME(FDateTime, "DateTime")
-US_MANUAL_GENERATE_STRUCT_NAME(FPolyglotTextData, "PolyglotTextData")
+GS_MANUAL_GENERATE_STRUCT_NAME(FRotator, "Rotator")
+GS_MANUAL_GENERATE_STRUCT_NAME(FQuat, "Quat")
+GS_MANUAL_GENERATE_STRUCT_NAME(FTransform, "Transform")
+GS_MANUAL_GENERATE_STRUCT_NAME(FLinearColor, "LinearColor")
+GS_MANUAL_GENERATE_STRUCT_NAME(FColor, "Color")
+GS_MANUAL_GENERATE_STRUCT_NAME(FPlane, "Plane")
+GS_MANUAL_GENERATE_STRUCT_NAME(FVector, "Vector")
+GS_MANUAL_GENERATE_STRUCT_NAME(FVector2D, "Vector2D")
+GS_MANUAL_GENERATE_STRUCT_NAME(FVector4, "Vector4")
+GS_MANUAL_GENERATE_STRUCT_NAME(FRandomStream, "RandomStream")
+GS_MANUAL_GENERATE_STRUCT_NAME(FGuid, "Guid")
+GS_MANUAL_GENERATE_STRUCT_NAME(FBox2D, "Box2D")
+GS_MANUAL_GENERATE_STRUCT_NAME(FFallbackStruct, "FallbackStruct")
+GS_MANUAL_GENERATE_STRUCT_NAME(FFloatRangeBound, "FloatRangeBound")
+GS_MANUAL_GENERATE_STRUCT_NAME(FFloatRange, "FloatRange")
+GS_MANUAL_GENERATE_STRUCT_NAME(FInt32RangeBound, "Int32RangeBound")
+GS_MANUAL_GENERATE_STRUCT_NAME(FInt32Range, "Int32Range")
+GS_MANUAL_GENERATE_STRUCT_NAME(FFloatInterval, "FloatInterval")
+GS_MANUAL_GENERATE_STRUCT_NAME(FInt32Interval, "Int32Interval")
+GS_MANUAL_GENERATE_STRUCT_NAME(FSoftObjectPath, "SoftObjectPath")
+GS_MANUAL_GENERATE_STRUCT_NAME(FSoftClassPath, "SoftClassPath")
+GS_MANUAL_GENERATE_STRUCT_NAME(FPrimaryAssetType, "PrimaryAssetType")
+GS_MANUAL_GENERATE_STRUCT_NAME(FPrimaryAssetId, "PrimaryAssetId")
+GS_MANUAL_GENERATE_STRUCT_NAME(FDateTime, "DateTime")
+GS_MANUAL_GENERATE_STRUCT_NAME(FPolyglotTextData, "PolyglotTextData")
 
 // detect UCLASS
 template<typename T>
@@ -256,7 +256,7 @@ struct TTraitsTemplate<TSet<InElementType, KeyFuncs, InAllocator>>
 TMulticastScriptDelegate<T> 
 TScriptDelegate<T>
 */
-US_MANUAL_GENERATE_NAME(FScriptDelegate, "ScriptDelegate")
+GS_MANUAL_GENERATE_NAME(FScriptDelegate, "ScriptDelegate")
 template<>
 struct TTraitsTemplate<FScriptDelegate>
 {
@@ -271,7 +271,7 @@ struct TTraitsTemplate<TScriptDelegate<T>> : TTraitsTemplate<FScriptDelegate>
 {
 };
 
-US_MANUAL_GENERATE_NAME(FMulticastScriptDelegate, "MulticastScriptDelegate")
+GS_MANUAL_GENERATE_NAME(FMulticastScriptDelegate, "MulticastScriptDelegate")
 template<>
 struct TTraitsTemplate<FMulticastScriptDelegate>
 {
@@ -293,7 +293,7 @@ FWeakObjectPtr/TWeakObjectPtr<T>
  int32	ObjectSerialNumber;
 }
 */
-US_MANUAL_GENERATE_NAME(FWeakObjectPtr, "WeakObjectPtr")
+GS_MANUAL_GENERATE_NAME(FWeakObjectPtr, "WeakObjectPtr")
 template<>
 struct TTraitsTemplate<FWeakObjectPtr>
 {
@@ -315,7 +315,7 @@ FScriptInterface/TScriptInterface<T>
  void*	InterfacePointer;
 }
 */
-US_MANUAL_GENERATE_NAME(FScriptInterface, "ScriptInterface")
+GS_MANUAL_GENERATE_NAME(FScriptInterface, "ScriptInterface")
 template<>
 struct TTraitsTemplate<FScriptInterface>
 {
@@ -338,7 +338,7 @@ FSoftObjectPtr/TSoftObjectPtr<T>/TSoftClassPtr<T>/TAssetPtr<T>/TAssetSubclassOf<
  FSoftObjectPath	ObjectID;
 }
 */
-US_MANUAL_GENERATE_NAME(FSoftObjectPtr, "SoftObjectPtr")
+GS_MANUAL_GENERATE_NAME(FSoftObjectPtr, "SoftObjectPtr")
 template<>
 struct TTraitsTemplate<FSoftObjectPtr>
 {
@@ -366,7 +366,7 @@ FLazyObjectPtr/TLazyObjectPtr<T>
 	FUniqueObjectGuid	ObjectID;
 }
 */
-US_MANUAL_GENERATE_NAME(FLazyObjectPtr, "LazyObjectPtr")
+GS_MANUAL_GENERATE_NAME(FLazyObjectPtr, "LazyObjectPtr")
 template<>
 struct TTraitsTemplate<FLazyObjectPtr>
 {
@@ -513,4 +513,3 @@ struct TClass2NameImpl<T, TTraitsTemplate<void>::dispatch_value>
 template<typename T>
 using TClass2Name = TClass2NameImpl<std::remove_cv_t<std::remove_reference_t<T>>>;
 }  // namespace GS_CLASS_TO_NAME
-
