@@ -180,6 +180,18 @@ UClass* GetFieldOwnerClass(T* Field)
 	return CastChecked<UClass>(Field->GetOuter());
 }
 
+template<class T>
+FORCEINLINE T* FindFProperty(const UStruct* Owner, FName FieldName)
+{
+	return FindField<T>(Owner, FieldName);
+}
+
+template<class T>
+FORCEINLINE T* FindUField(const UStruct* Owner, FName FieldName)
+{
+	return FindField<T>(Owner, FieldName);
+}
+
 template<typename T>
 struct TFieldPath
 {
