@@ -33,7 +33,6 @@ THE SOFTWARE.
 #include "HAL/IConsoleManager.h"
 #include "Launch/Resources/Version.h"
 #include "UObject/UObjectGlobals.h"
-#include "WorldObjectStorage.h"
 
 //////////////////////////////////////////////////////////////////////////
 namespace GenericSingletons
@@ -99,11 +98,6 @@ UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
 	return NewReflection;
 }
 
-UGenericSingletons* GetManager(UWorld* World, bool bEnsure)
-{
-	return FWORLDOBJECTSTORE::GetObject<UGenericSingletons>(World, bEnsure);
-}
-
 void SetWorldCleanup(FSimpleDelegate Cb, bool EditorOnly)
 {
 	if ((!EditorOnly || !GIsEditor))
@@ -125,6 +119,34 @@ void SetWorldCleanup(FSimpleDelegate Cb, bool EditorOnly)
 }
 }  // namespace GenericSingletons
 //////////////////////////////////////////////////////////////////////////
+#define FWORLDOBJECTSTORE GS_FWORLDOBJECTSTORE
+#include "WorldObjectStorage.h"
+namespace GenericSingletons
+{
+auto FindGameInstance()
+{
+	return FWORLDOBJECTSTORE::FindInstance();
+}
+
+UGenericSingletons* GetManager(UWorld* World, bool bEnsure)
+{
+	return FWORLDOBJECTSTORE::GetObject<UGenericSingletons>(World, bEnsure);
+}
+}  // namespace GenericSingletons
+
+UGenericSingletons::UGenericSingletons()
+{
+	if (TrueOnFirstCall([] {}))
+	{
+		// GEngine->OnWorldAdded();
+		// GEngine->OnWorldDestroyed();
+		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) { FWORLDOBJECTSTORE::Remove<UGenericSingletons>(World); });
+
+		// 	FWorldDelegates::OnPreWorldInitialization.AddLambda(
+		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { GenericSingletons::GetManager(Wrold); });
+	}
+}
+#undef FWORLDOBJECTSTORE
 
 #if !UE_SERVER
 #	include "Blueprint/UserWidget.h"
@@ -231,7 +253,7 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 	if (!IsValid(World))
 	{
 		ensureAlwaysMsgf(!bIsActorClass, TEXT("world not existed!!!"));
-		auto Instance = FWORLDOBJECTSTORE::FindInstance();
+		auto Instance = GenericSingletons::FindGameInstance();
 		if (ensure(Instance))
 		{
 			Ptr = NewObject<UObject>(Instance, Class);
@@ -320,17 +342,4 @@ bool UGenericSingletons::AsyncCreate(const UObject* BindedObject, const FString&
 	auto Handle = UGenericSingletons::AsyncLoad(InPath, FAsyncObjectCallback::CreateLambda(Lambda));
 
 	return Handle.IsValid();
-}
-
-UGenericSingletons::UGenericSingletons()
-{
-	if (TrueOnFirstCall([] {}))
-	{
-		// GEngine->OnWorldAdded();
-		// GEngine->OnWorldDestroyed();
-		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) { FWORLDOBJECTSTORE::Remove<UGenericSingletons>(World); });
-
-		// 	FWorldDelegates::OnPreWorldInitialization.AddLambda(
-		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { GenericSingletons::GetManager(Wrold); });
-	}
 }
