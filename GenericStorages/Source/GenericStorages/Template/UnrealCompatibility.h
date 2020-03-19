@@ -175,9 +175,21 @@ FORCEINLINE EClassCastFlags GetPropCastFlags(FProperty* Prop)
 }
 
 template<typename T>
-UClass* GetFieldOwnerClass(T* Field)
+UClass* GetPropOwnerClass(T* Prop)
 {
-	return CastChecked<UClass>(Field->GetOuter());
+	return CastChecked<UClass>(Prop->GetOuter());
+}
+
+template<class T>
+FORCEINLINE T* FindFProperty(const UStruct* Owner, FName FieldName)
+{
+	return FindField<T>(Owner, FieldName);
+}
+
+template<class T>
+FORCEINLINE T* FindUField(const UStruct* Owner, FName FieldName)
+{
+	return FindField<T>(Owner, FieldName);
 }
 
 template<class T>
@@ -196,47 +208,47 @@ template<typename T>
 struct TFieldPath
 {
 public:
-	TFieldPath(const T* InField = nullptr)
-		: Field(const_cast<T*>(InField))
+	TFieldPath(const T* InProp = nullptr)
+		: Prop(const_cast<T*>(InProp))
 	{
 	}
-	TFieldPath(T& InField)
-		: Field(&InField)
+	TFieldPath(T& InProp)
+		: Prop(&InProp)
 	{
 	}
 
-	void operator=(const T* InField) { Field = const_cast<T*>(InField); }
+	void operator=(const T* InProp) { Prop = const_cast<T*>(InProp); }
 
-	T* operator*() const { return Field; }
-	T* operator->() const { return Field; }
+	T* operator*() const { return Prop; }
+	T* operator->() const { return Prop; }
 
-	explicit operator bool() const { return !!Field; }
-	T* Get() const { return Field; }
-	T& GetOwnerVariant() const { return *Field; }
-	UClass* GetOwnerClass() const { return GetFieldOwnerClass(Field); }
+	explicit operator bool() const { return !!Prop; }
+	T* Get() const { return Prop; }
+	T& GetOwnerVariant() const { return *Prop; }
+	UClass* GetOwnerClass() const { return GetPropOwnerClass(Prop); }
 
 protected:
-	mutable T* Field;
+	mutable T* Prop;
 };
 
 template<typename T>
 using TFieldPathType = T*;
 template<typename T>
-FORCEINLINE T* GetPropPtr(T* Field)
+FORCEINLINE T* GetPropPtr(T* Prop)
 {
-	return Field;
+	return Prop;
 }
 template<typename T>
-FORCEINLINE T* GetPropPtr(TFieldPath<T>& Field)
+FORCEINLINE T* GetPropPtr(TFieldPath<T>& Prop)
 {
 	return Field.Get();
 }
 
-FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
+FORCEINLINE UObject* GetPropOwnerUObject(FProperty* Prop)
 {
 	return Prop->GetOuter();
 }
-FORCEINLINE FString GetFieldName(FProperty* Prop)
+FORCEINLINE FString GetPropOwnerName(FProperty* Prop)
 {
 	return Prop->GetOuter()->GetName();
 }
@@ -256,25 +268,25 @@ template<typename T>
 using TFieldPathType = TFieldPath<T>;
 
 template<typename T>
-FORCEINLINE UClass* GetFieldOwnerClass(T* Field)
+FORCEINLINE T* GetPropPtr(T* Prop)
 {
-	return Field->GetOwnerClass();
+	return Prop;
 }
 template<typename T>
-FORCEINLINE T* GetPropPtr(T* Field)
+FORCEINLINE FProperty* GetPropPtr(const TFieldPath<T>& Prop)
 {
-	return Field;
+	return const_cast<TFieldPath<T>&>(Prop).Get();
 }
-template<typename T>
-FORCEINLINE FProperty* GetPropPtr(const TFieldPath<T>& Field)
-{
-	return const_cast<TFieldPath<T>&>(Field).Get();
-}
-FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
+FORCEINLINE UObject* GetPropOwnerUObject(FProperty* Prop)
 {
 	return Prop->GetOwner<UObject>();
 }
-FORCEINLINE FString GetFieldName(FProperty* Prop)
+template<typename T>
+FORCEINLINE UClass* GetPropOwnerClass(T* Prop)
+{
+	return Prop->GetOwnerClass();
+}
+FORCEINLINE FString GetPropOwnerName(FProperty* Prop)
 {
 	return Prop->GetOwnerVariant().GetName();
 }

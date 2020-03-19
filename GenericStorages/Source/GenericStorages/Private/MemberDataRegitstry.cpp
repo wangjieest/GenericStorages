@@ -27,8 +27,8 @@ THE SOFTWARE.
 #include "Engine/Engine.h"
 #include "Engine/GameEngine.h"
 #include "Engine/World.h"
-#include "UObject/UObjectThreadContext.h"
 #include "GenericSingletons.h"
+#include "UObject/UObjectThreadContext.h"
 
 namespace MemberDataRegitstry
 {
@@ -59,7 +59,7 @@ static void Remove(FWeakObjectPtr WeakObject)
 FMemberDataStorageBase::FMemberDataStorageBase()
 {
 	FUObjectThreadContext& ThreadContext = FUObjectThreadContext::Get();
-	UObject* Initializer = ThreadContext.IsInConstructor ? ThreadContext.TopInitializerChecked().GetObj() : nullptr;
+	UObject* Initializer = ThreadContext.IsInConstructor ? ThreadContext.TopInitializer()->GetObj() : nullptr;
 	if (!Outer.IsValid())
 		Outer = Initializer;
 }

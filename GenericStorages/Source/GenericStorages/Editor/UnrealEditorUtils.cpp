@@ -547,7 +547,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 		{
 			auto ParentContainer = ParentHandle->GetProperty();
 			bool HasParent = !!ParentContainer;
-			bool IsOutmost = HasParent ? GetOwnerUObject(ParentContainer)->IsA(UClass::StaticClass()) : true;
+			bool IsOutmost = HasParent ? GetPropOwnerUObject(ParentContainer)->IsA(UClass::StaticClass()) : true;
 			if (!IsOutmost)
 			{
 				auto ParentParentHandle = ParentHandle->GetParentHandle();
@@ -629,7 +629,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 			auto Property = PropertyHandle->GetProperty();
 			if (ensure(CastField<FStructProperty>(Property)))
 			{
-				bool IsOutmost = GetOwnerUObject(Property)->IsA(UClass::StaticClass());
+				bool IsOutmost = GetPropOwnerUObject(Property)->IsA(UClass::StaticClass());
 				if (IsOutmost)
 				{
 					// Outer->Struct
@@ -1004,7 +1004,7 @@ TSharedRef<SWidget> FDatatableTypePicker::MakeDynamicPropertyWidget(TSharedPtr<I
 //////////////////////////////////////////////////////////////////////////
 FScopedPropertyTransaction::FScopedPropertyTransaction(const TSharedPtr<IPropertyHandle>& InPropertyHandle, const FText& SessionName, const TCHAR* TransactionContext)
 	: PropertyHandle(InPropertyHandle.Get())
-	, Scoped(TransactionContext, SessionName, GetOwnerUObject(PropertyHandle->GetProperty()))
+	, Scoped(TransactionContext, SessionName, GetPropOwnerUObject(PropertyHandle->GetProperty()))
 {
 	PropertyHandle->NotifyPreChange();
 }
