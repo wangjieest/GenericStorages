@@ -23,25 +23,22 @@ THE SOFTWARE.
 ****************************************************************************/
 
 #pragma once
-#include "CoreMinimal.h"
+#ifndef WORLD_OBJECT_STORAGE_H
+#	define WORLD_OBJECT_STORAGE_H
+#	include "CoreMinimal.h"
 
-#include "Engine/GameEngine.h"
-#include "Engine/GameInstance.h"
-#include "Engine/World.h"
-
-#ifndef FWORLDOBJECTSTORE
-#	define FWORLDOBJECTSTORE FWorldObjectStoreImpl
-#endif
-#define FWORLDOBJECTSTORE_PAIR FWORLDOBJECTSTORE##Pair
+#	include "Engine/GameEngine.h"
+#	include "Engine/GameInstance.h"
+#	include "Engine/World.h"
 
 template<typename T>
-struct FWORLDOBJECTSTORE_PAIR
+struct FWorldObjectStorePairImpl
 {
 	TWeakObjectPtr<UWorld> WeakWorld;
 	TWeakObjectPtr<T> Object;
 };
 
-class FWORLDOBJECTSTORE
+class FWorldObjectStoreImpl
 {
 public:
 	template<typename T>
@@ -133,12 +130,12 @@ public:
 	}
 
 	template<typename T>
-	static TArray<FWORLDOBJECTSTORE_PAIR<T>, TInlineAllocator<4>> Storage;
+	static TArray<FWorldObjectStorePairImpl<T>, TInlineAllocator<4>> Storage;
 
 	static UGameInstance* FindInstance()
 	{
 		UGameInstance* Instance = nullptr;
-#if WITH_EDITOR
+#	if WITH_EDITOR
 		if (GIsEditor)
 		{
 			ensureAlwaysMsgf(!GIsInitialLoad && GEngine, TEXT("Is it needed to get singleton before engine initialized?"));
@@ -173,7 +170,7 @@ public:
 			Instance = World ? World->GetGameInstance() : nullptr;
 		}
 		else
-#endif
+#	endif
 		{
 			if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
 			{
@@ -183,3 +180,8 @@ public:
 		return Instance;
 	}
 };
+
+template<typename T>
+TArray<FWorldObjectStorePairImpl<T>, TInlineAllocator<4>> FWorldObjectStoreImpl::Storage;
+
+#endif

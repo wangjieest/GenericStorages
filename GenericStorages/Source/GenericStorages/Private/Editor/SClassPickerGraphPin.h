@@ -34,7 +34,7 @@ THE SOFTWARE.
 #	include "Widgets/DeclarativeSyntaxSupport.h"
 #	include "Widgets/SWidget.h"
 
-// CustomClassPinPicker with MetaClass AllowedClasses AllowAbstract MustImplement
+// CustomClassPinPicker with MetaClass [AllowedClasses AllowAbstract MustImplement]
 class CustomClassPinPicker;
 class SClassPickerGraphPin : public SGraphPinObject
 {
@@ -69,7 +69,7 @@ protected:
 	mutable FAssetData CachedEditorAssetData;
 };
 
-// CustomObjectFilter with MetaClass
+// CustomObjectFilter with [MetaClass]
 class CustomObjectFilter;
 class SObjectFilterGraphPin : public SGraphPinObject
 {

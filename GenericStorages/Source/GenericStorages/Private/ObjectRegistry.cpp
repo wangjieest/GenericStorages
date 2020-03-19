@@ -27,6 +27,23 @@ THE SOFTWARE.
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GenericSingletons.h"
+#include "UnrealCompatibility.h"
+
+FCriticalSection UObjectRegistry::Critical;
+
+UObjectRegistry::FCSLock423::FCSLock423()
+{
+#if ENGINE_MINOR_VERSION >= 23
+	UObjectRegistry::Critical.Lock();
+#endif
+}
+
+UObjectRegistry::FCSLock423::~FCSLock423()
+{
+#if ENGINE_MINOR_VERSION >= 23
+	UObjectRegistry::Critical.Unlock();
+#endif
+}
 
 namespace ObjectRegistry
 {
@@ -72,14 +89,6 @@ auto AllocNewStorage(int32& Index)
 	return Index;
 }
 TMap<TWeakObjectPtr<UClass>, int32> ClassToID;
-bool IsRequestingExit()
-{
-#if ENGINE_MINOR_VERSION <= 23
-	return GIsRequestingExit;
-#else
-	return IsEngineExitRequested();
-#endif
-}
 }  // namespace ObjectRegistry
 
 UClass* UObjectRegistry::FindFirstNativeClass(UClass* Class)
@@ -97,7 +106,7 @@ UClass* UObjectRegistry::FindFirstNativeClass(UClass* Class)
 #if WITH_EDITOR
 bool UObjectRegistry::EditorIsGameWorld(const UObject* WorldContextObj)
 {
-	if (IsRunningCommandlet() || !UObjectInitialized() || ObjectRegistry::IsRequestingExit())
+	if (IsRunningCommandlet() || !UObjectInitialized() || IsEngineExitRequested())
 		return false;
 
 	check(WorldContextObj);
@@ -118,8 +127,6 @@ bool UObjectRegistry::EditorIsGameWorld(const UObject* WorldContextObj)
 	return IsValid(World) && World->IsGameWorld();
 }
 #endif
-
-FCriticalSection UObjectRegistry::Critical;
 
 FWeakObjectArray::TIterator FObjectRegistryType::CreateIterator()
 {
@@ -180,9 +187,8 @@ UObjectRegistry::UObjectRegistry()
 					++It;
 			}
 #if !WITH_EDITOR
-#	if ENGINE_MINOR_VERSION >= 23
-			FScopeLock Lock(&Critical);
-#	endif
+			FCSLock423 Lock;
+
 			if (auto Mgr = Get(World))
 				Mgr->Binddings.Empty();
 #endif
@@ -192,7 +198,7 @@ UObjectRegistry::UObjectRegistry()
 
 UObjectRegistry* UObjectRegistry::Get(const UObject* Obj)
 {
-	if (!UObjectInitialized() || ObjectRegistry::IsRequestingExit())
+	if (!UObjectInitialized() || IsEngineExitRequested())
 		return nullptr;
 
 #if WITH_EDITOR
@@ -263,9 +269,7 @@ bool UObjectRegistry::AddClassToRegistry(UObject* Object, UClass* StopClass, int
 		return true;
 	}
 	{
-#if ENGINE_MINOR_VERSION >= 23
-		FScopeLock Lock(&Critical);
-#endif
+		FCSLock423 Lock;
 		ObjectRegistry::EachClass(Object, StopClass, [&](auto CurClass) { ObjectRegistry::AllocNewStorage(ObjectRegistry::ClassToID.FindOrAdd(CurClass)); });
 		return false;
 	}
@@ -276,9 +280,7 @@ bool UObjectRegistry::RemoveClassFromRegistry(UObject* Object, UClass* StopClass
 	if (!EditorIsGameWorld(Object))
 		return true;
 
-#if ENGINE_MINOR_VERSION >= 23
-	FScopeLock Lock(&Critical);
-#endif
+	FCSLock423 Lock;
 	auto Class = Object->GetClass();
 #if WITH_EDITOR
 	if (!IsValid(Class) || Class->GetFName().IsNone() || Class->GetName().StartsWith(TEXT("SKEL_")))
@@ -293,9 +295,7 @@ void UObjectRegistry::AddObjectToRegistry(UObject* Object, UClass* StopClass)
 	// 	if (!EditorIsGameWorld(Object))
 	// 		return;
 
-#if ENGINE_MINOR_VERSION >= 23
-	FScopeLock Lock(&Critical);
-#endif
+	FCSLock423 Lock;
 	check(!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject));
 
 	ObjectRegistry::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
@@ -320,9 +320,7 @@ void UObjectRegistry::RemoveObjectFromRegistry(UObject* Object, UClass* StopClas
 	// 	if (!EditorIsGameWorld(Object))
 	// 		return;
 
-#if ENGINE_MINOR_VERSION >= 23
-	FScopeLock Lock(&Critical);
-#endif
+	FCSLock423 Lock;
 
 	check(!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject));
 

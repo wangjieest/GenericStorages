@@ -224,7 +224,7 @@ FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
 {
 	return Prop->GetOuter();
 }
-FORCEINLINE const FString& GetFieldName(FProperty* Prop)
+FORCEINLINE FString GetFieldName(FProperty* Prop)
 {
 	return Prop->GetOuter()->GetName();
 }
@@ -262,7 +262,7 @@ FORCEINLINE UObject* GetOwnerUObject(FProperty* Prop)
 {
 	return Prop->GetOwner<UObject>();
 }
-FORCEINLINE const FString& GetFieldName(FProperty* Prop)
+FORCEINLINE FString GetFieldName(FProperty* Prop)
 {
 	return Prop->GetOwnerVariant().GetName();
 }
@@ -270,6 +270,10 @@ FORCEINLINE const FString& GetFieldName(FProperty* Prop)
 
 #	if ENGINE_MINOR_VERSION < 24
 #		define UE_ARRAY_COUNT ARRAY_COUNT
+FORCEINLINE bool IsEngineExitRequested()
+{
+	return GIsRequestingExit;
+}
 #	endif
 
 #	if ENGINE_MINOR_VERSION < 23
@@ -279,7 +283,6 @@ FORCEINLINE const FString& GetFieldName(FProperty* Prop)
 #		include "Templates/UnrealTemplate.h"
 
 #		define UE_DEPRECATED(VERSION, MESSAGE) DEPRECATED(VERSION, MESSAGE)
-
 /**
  * Implements a weak object delegate binding for C++ functors, e.g. lambdas.
  */

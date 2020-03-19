@@ -24,15 +24,17 @@ THE SOFTWARE.
 
 #include "ObjectDataRegistry.h"
 
+#include "GameFramework/Actor.h"
+#include "GenericSingletons.h"
 #include "Misc/CoreDelegates.h"
 #include "Templates/SharedPointer.h"
-#include "GenericSingletons.h"
-#include "GameFramework/Actor.h"
+#include "UnrealCompatibility.h"
 
 namespace ObjectDataRegistry
 {
 using DataType = TSharedPtr<void>;
 using KeyType = FName;
+
 struct FObjectDataStorage : public FUObjectArray::FUObjectDeleteListener
 {
 	virtual ~FObjectDataStorage()
@@ -41,7 +43,6 @@ struct FObjectDataStorage : public FUObjectArray::FUObjectDeleteListener
 			DisableListener();
 	}
 
-protected:
 	TMap<FWeakObjectPtr, TMap<KeyType, DataType>> ObjectDataStorage;
 	TMap<KeyType, TArray<FWeakObjectPtr>> KeyCache;
 	bool bListened = false;
@@ -167,7 +168,6 @@ public:
 		}
 		return false;
 	}
-	friend class UObjectDataRegisterUtil;
 };
 
 TUniquePtr<FObjectDataStorage> Mgr;

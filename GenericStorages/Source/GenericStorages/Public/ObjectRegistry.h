@@ -258,6 +258,13 @@ private:
 	static bool RemoveClassFromRegistry(UObject* Object, UClass* InNativeClass);
 
 	static FCriticalSection Critical;
+	class FCSLock423 final
+	{
+	public:
+		FCSLock423();
+		~FCSLock423();
+	};
+
 	template<typename T>
 	static int32 TypeID;
 
@@ -272,9 +279,8 @@ void UObjectRegistry::EachObject(const UObject* WorldContextObj, const F& f)
 	if (!EditorIsGameWorld(WorldContextObj))
 		return;
 
-#if ENGINE_MINOR_VERSION >= 23
-	FScopeLock Lock(&Critical);
-#endif
+	FCSLock423 Lock;
+
 #if WITH_EDITOR
 	if (GIsEditor)
 	{
