@@ -192,18 +192,6 @@ FORCEINLINE T* FindUField(const UStruct* Owner, FName FieldName)
 	return FindField<T>(Owner, FieldName);
 }
 
-template<class T>
-FORCEINLINE T* FindFProperty(const UStruct* Owner, FName FieldName)
-{
-	return FindField<T>(Owner, FieldName);
-}
-
-template<class T>
-FORCEINLINE T* FindUField(const UStruct* Owner, FName FieldName)
-{
-	return FindField<T>(Owner, FieldName);
-}
-
 template<typename T>
 struct TFieldPath
 {
@@ -241,7 +229,7 @@ FORCEINLINE T* GetPropPtr(T* Prop)
 template<typename T>
 FORCEINLINE T* GetPropPtr(TFieldPath<T>& Prop)
 {
-	return Field.Get();
+	return Prop.Get();
 }
 
 FORCEINLINE UObject* GetPropOwnerUObject(FProperty* Prop)

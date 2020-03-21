@@ -25,10 +25,10 @@ THE SOFTWARE.
 #pragma once
 #include "CoreMinimal.h"
 
-#include "UnrealCompatibility.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Launch/Resources/Version.h"
 #include "UObject/Class.h"
+#include "UnrealCompatibility.h"
 
 #include "GenericSingletons.generated.h"
 
@@ -38,7 +38,7 @@ class UGenericSingletons;
 namespace GenericSingletons
 {
 GENERICSTORAGES_API UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass = nullptr);
-GENERICSTORAGES_API UGenericSingletons* GetManager(UWorld* World, bool bEnsure);
+GENERICSTORAGES_API UGenericSingletons* GetManager(UWorld* World);
 GENERICSTORAGES_API void SetWorldCleanup(FSimpleDelegate Cb, bool bEditorOnly = false);
 }  // namespace GenericSingletons
 
@@ -110,7 +110,7 @@ public:  // C++
 	static T* TryGetSingleton(const UObject* WorldContextObject, const F& ConstructFunc)
 	{
 		static_assert(std::is_convertible<decltype(ConstructFunc()), T*>::value, "err");
-		auto Mgr = GenericSingletons::GetManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr, true);
+		auto Mgr = GenericSingletons::GetManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
 		auto& Ptr = Mgr->Singletons.FindOrAdd(T::StaticClass());
 		if (!IsValid(Ptr))
 		{

@@ -30,10 +30,10 @@ THE SOFTWARE.
 #include "Engine/GameEngine.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
+#include "GenericWorldSingletons.h"
 #include "HAL/IConsoleManager.h"
 #include "Launch/Resources/Version.h"
 #include "UObject/UObjectGlobals.h"
-#include "WorldObjectStorage.h"
 
 //////////////////////////////////////////////////////////////////////////
 namespace GenericSingletons
@@ -118,14 +118,10 @@ void SetWorldCleanup(FSimpleDelegate Cb, bool EditorOnly)
 		}
 	}
 }
-auto FindGameInstance()
-{
-	return FWorldObjectStoreImpl::FindInstance();
-}
 
-UGenericSingletons* GetManager(UWorld* World, bool bEnsure)
+UGenericSingletons* GetManager(UWorld* World)
 {
-	return FWorldObjectStoreImpl::GetObject<UGenericSingletons>(World, bEnsure);
+	return GenericWorldSingletons::GetObject<UGenericSingletons>(World);
 }
 
 }  // namespace GenericSingletons
@@ -136,7 +132,7 @@ UGenericSingletons::UGenericSingletons()
 	{
 		// GEngine->OnWorldAdded();
 		// GEngine->OnWorldDestroyed();
-		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) { FWorldObjectStoreImpl::Remove<UGenericSingletons>(World); });
+		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) { GenericWorldSingletons::RemoveObject<UGenericSingletons>(World); });
 
 		// 	FWorldDelegates::OnPreWorldInitialization.AddLambda(
 		// 		[](UWorld* Wrold, const UWorld::InitializationValues IVS) { GenericSingletons::GetManager(Wrold); });
@@ -168,7 +164,7 @@ UObject* UGenericSingletons::RegisterAsSingletonImpl(UObject* Object, const UObj
 		UE_LOG(LogTemp, Warning, TEXT("UGenericSingletons::RegisterAsSingleton Error"));
 		return nullptr;
 	}
-	auto Mgr = GenericSingletons::GetManager(World, true);
+	auto Mgr = GenericSingletons::GetManager(World);
 	auto ObjectClass = Object->GetClass();
 
 	UObject* LastPtr = nullptr;
@@ -212,7 +208,7 @@ UObject* UGenericSingletons::GetSingletonImpl(UClass* Class, const UObject* Worl
 		RegClass = Class;
 
 	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
-	auto Mgr = GenericSingletons::GetManager(World, bCreate);
+	auto Mgr = GenericSingletons::GetManager(World);
 	UObject*& Ptr = Mgr->Singletons.FindOrAdd(RegClass);
 #if 0
 	UE_LOG(LogTemp, Log, TEXT("UGenericSingletons::GetSingleton %s(%p) -> %s -> %s(%p)"),
@@ -248,7 +244,7 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 	if (!IsValid(World))
 	{
 		ensureAlwaysMsgf(!bIsActorClass, TEXT("world not existed!!!"));
-		auto Instance = GenericSingletons::FindGameInstance();
+		auto Instance = GenericWorldSingletons::FindGameInstance();
 		if (ensure(Instance))
 		{
 			Ptr = NewObject<UObject>(Instance, Class);
