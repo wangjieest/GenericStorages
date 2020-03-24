@@ -512,80 +512,53 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 		if (CurIndex >= 0)
 		{
 			auto ParentContainer = ParentHandle->GetProperty();
-			bool HasParent = !!ParentContainer;
-			bool IsOutmost = HasParent ? GetPropOwnerUObject(ParentContainer)->IsA(UClass::StaticClass()) : true;
+			bool IsOutmost = !ParentContainer || GetPropOwnerUObject(ParentContainer)->IsA(UClass::StaticClass());
 			if (!IsOutmost)
 			{
 				auto ParentParentHandle = ParentHandle->GetParentHandle();
 				auto ParentParentProperty = ParentParentHandle->GetProperty();
+
+				// Outer->[Struct...]->Container[CurIndex]
 				if (ensure(CastField<FStructProperty>(ParentParentProperty)))
 				{
 					void* ParentValueAddress = GetStructPropertyAddress(ParentParentHandle.ToSharedRef(), Outer);
 					ParentAddress = ParentParentProperty->ContainerPtrToValuePtr<void>(ParentValueAddress);
 				}
 			}
+			else
+			{
+				// Outer->Container[CurIndex]
+				ParentAddress = ParentContainer->ContainerPtrToValuePtr<void>(Outer);
+			}
+
 			if (ParentHandle->AsArray())
 			{
-				auto ContainerProperty = CastField<FArrayProperty>(ParentContainer);
-				if (IsOutmost)
-				{
-					// Outer->Container[CurIndex]
-					ParentAddress = ContainerProperty->ContainerPtrToValuePtr<void>(Outer);
-				}
-				else
-				{
-					// Outer->[Struct...]->Container[CurIndex]
-				}
+				auto ContainerProperty = CastFieldChecked<FArrayProperty>(ParentContainer);
 				if (ParentAddress)
 				{
 					FScriptArrayHelper ArrHelper(ContainerProperty, ParentAddress);
 					ValueAddress = ArrHelper.GetRawPtr(CurIndex);
 				}
-
 				break;
 			}
 			if (ParentHandle->AsSet())
 			{
-				auto ContainerProperty = CastField<FSetProperty>(ParentContainer);
-				if (IsOutmost)
-				{
-					// Outer->Container[CurIndex]
-					ParentAddress = ContainerProperty->ContainerPtrToValuePtr<void>(Outer);
-				}
-				else
-				{
-					// Outer->[Struct...]->Container[CurIndex]
-				}
+				auto ContainerProperty = CastFieldChecked<FSetProperty>(ParentContainer);
 				if (ParentAddress)
 				{
 					FScriptSetHelper SetHelper(ContainerProperty, ParentAddress);
 					ValueAddress = SetHelper.GetElementPtr(CurIndex);
 				}
-
 				break;
 			}
 			if (ParentHandle->AsMap())
 			{
-				auto ContainerProperty = CastField<FMapProperty>(ParentContainer);
-
-				// FIXME Outer->Container[CurIndex].Key
-				auto KeyHandle = ParentHandle->GetKeyHandle();
-
-				if (IsOutmost)
-				{
-					// Outer->Container[CurIndex].Value
-					ParentAddress = ContainerProperty->ContainerPtrToValuePtr<void>(Outer);
-				}
-				else
-				{
-					// Outer->[Struct...]->Container[CurIndex].Value
-				}
+				auto ContainerProperty = CastFieldChecked<FMapProperty>(ParentContainer);
 				if (ParentAddress)
 				{
 					FScriptMapHelper MapHelper(ContainerProperty, ParentAddress);
-					ValueAddress = MapHelper.GetValuePtr(CurIndex);
+					ValueAddress = PropertyHandle->GetKeyHandle() ? MapHelper.GetValuePtr(CurIndex) : MapHelper.GetKeyPtr(CurIndex);
 				}
-
 				break;
 			}
 			ensure(false);
@@ -633,7 +606,7 @@ GENERICSTORAGES_API void* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& 
 	return nullptr;
 }
 
-void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropertyHandle, FName MemberName)
+void* GetPropertyMemberPtr(const TSharedPtr<IPropertyHandle>& StructPropertyHandle, FName MemberName)
 {
 	do
 	{
@@ -644,7 +617,7 @@ void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropert
 		if (!StructProperty)
 			break;
 
-#	if 1
+#	if 0
 		TArray<void*> RawData;
 		StructPropertyHandle->AccessRawData(RawData);
 		if (!RawData.Num())

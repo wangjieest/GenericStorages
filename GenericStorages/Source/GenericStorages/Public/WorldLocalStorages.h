@@ -30,10 +30,10 @@ THE SOFTWARE.
 #include "Engine/World.h"
 #include "Templates/UnrealTypeTraits.h"
 
-#include "GenericWorldSingletons.generated.h"
+#include "WorldLocalStorages.generated.h"
 
 UCLASS()
-class UGenericWorldSingletonObject : public UObject
+class UGenericWorldLocalStore : public UObject
 {
 	GENERATED_BODY()
 public:
@@ -41,10 +41,11 @@ public:
 	TSharedPtr<void> Store;
 };
 
-namespace GenericWorldSingletons
+namespace WorldLocalStorages
 {
-template<typename T, typename V = void>
-struct TGenericWorldSingletonStore;
+template<typename T, uint8 N = 4, typename V = void>
+struct TGenericWorldLocalStorage;
+
 static inline UGameInstance* FindGameInstance()
 {
 	UGameInstance* Instance = nullptr;
@@ -93,7 +94,7 @@ static inline UGameInstance* FindGameInstance()
 	return Instance;
 }
 
-struct TGenericWorldSingletonOps
+struct FWorldLocalStorageOps
 {
 protected:
 	template<typename K>
@@ -145,8 +146,8 @@ protected:
 };
 
 // UObject
-template<typename T>
-struct TGenericWorldSingletonStore<T, typename TEnableIf<TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public TGenericWorldSingletonOps
+template<typename T, uint8 N>
+struct TGenericWorldLocalStorage<T, N, typename TEnableIf<TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public FWorldLocalStorageOps
 {
 public:
 	T* GetObject(const UObject* WorldContextObj)
@@ -158,7 +159,7 @@ public:
 	void Remove(const UObject* WorldContextObj)
 	{
 		UWorld* World = WorldContextObj ? WorldContextObj->GetWorld() : nullptr;
-		TGenericWorldSingletonOps::Remove(Storage, World);
+		FWorldLocalStorageOps::Remove(Storage, World);
 	}
 
 protected:
@@ -199,12 +200,12 @@ protected:
 		TWeakObjectPtr<UWorld> WeakWorld;
 		TWeakObjectPtr<T> Object;
 	};
-	TArray<FStorePair, TInlineAllocator<4>> Storage;
+	TArray<FStorePair, TInlineAllocator<N>> Storage;
 };
 
 // Struct
-template<typename T>
-struct TGenericWorldSingletonStore<T, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public TGenericWorldSingletonOps
+template<typename T, uint8 N>
+struct TGenericWorldLocalStorage<T, N, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public FWorldLocalStorageOps
 {
 public:
 	T* GetObject(const UObject* WorldContextObj)
@@ -216,7 +217,7 @@ public:
 	void Remove(const UObject* WorldContextObj)
 	{
 		UWorld* World = WorldContextObj ? WorldContextObj->GetWorld() : nullptr;
-		TGenericWorldSingletonOps::Remove(Storage, World);
+		FWorldLocalStorageOps::Remove(Storage, World);
 	}
 
 protected:
@@ -227,7 +228,7 @@ protected:
 		auto& Ptr = FindOrAdd(Storage, World);
 		if (!Ptr.IsValid())
 		{
-			auto Obj = NewObject<UGenericWorldSingletonObject>();
+			auto Obj = NewObject<UGenericWorldLocalStore>();
 			auto SP = MakeShared<T>(Forward<TArgs>(Args)...);
 			check(SP);
 			Ptr = SP;
@@ -258,12 +259,12 @@ protected:
 		TWeakObjectPtr<UWorld> WeakWorld;
 		TWeakPtr<T> Object;
 	};
-	TArray<FStorePair, TInlineAllocator<4>> Storage;
+	TArray<FStorePair, TInlineAllocator<N>> Storage;
 };
 
 //////////////////////////////////////////////////////////////////////////
 template<typename T>
-TGenericWorldSingletonStore<T> Storage;
+TGenericWorldLocalStorage<T> Storage;
 
 template<typename T, typename... TArgs>
 T* GetObject(const UObject* Context, TArgs&&... Args)
@@ -278,7 +279,7 @@ void RemoveObject(const UObject* Context)
 
 //////////////////////////////////////////////////////////////////////////
 #if 0
-// advanced usage
-static TGenericWorldSingletonStore<T> WorldLevelStaticObject;
+// world local storage
+static TGenericWorldLocalStorage<T> WorldLocalStorage;
 #endif
-};  // namespace GenericWorldSingletons
+};  // namespace WorldLocalStorages

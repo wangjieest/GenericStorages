@@ -107,7 +107,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		}
 		else
 		{
-			if (auto Class = UnrealEditorUtils::GetStructPropertyValuePtr<TSubclassOf<UActorComponent>>(PropertyHandle, ComponentPicker::NameComponentClass))
+			if (auto Class = UnrealEditorUtils::GetPropertyMemberPtr<TSubclassOf<UActorComponent>>(PropertyHandle, ComponentPicker::NameComponentClass))
 			{
 				if (Class->Get())
 				{
@@ -154,7 +154,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 			FilterHandle->MarkHiddenByCustomization();
 
 		Names.Reset();
-		FName* MyValue = UnrealEditorUtils::GetStructPropertyValuePtr<FName>(PropertyHandle, ComponentPicker::NameComponent);
+		FName* MyValue = UnrealEditorUtils::GetPropertyMemberPtr<FName>(PropertyHandle, ComponentPicker::NameComponent);
 		CurText = FText::FromName(*MyValue);
 		if (*MyValue != NAME_None)
 			Names.Add(MakeShared<FName>(NAME_None));
@@ -194,7 +194,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 					auto ThisProperty = RootPropertyHandle.Pin();
 					if (ThisProperty.IsValid())
 					{
-						if (auto CurName = UnrealEditorUtils::GetStructPropertyValuePtr<FName>(ThisProperty, ComponentPicker::NameComponent))
+						if (auto CurName = UnrealEditorUtils::GetPropertyMemberPtr<FName>(ThisProperty, ComponentPicker::NameComponent))
 						{
 							CurText = FText::FromName(*InName);
 							if (*InName != *CurName)
@@ -216,7 +216,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 						auto ThisProperty = RootPropertyHandle.Pin();
 						if (ThisProperty.IsValid())
 						{
-							if (FName* MyValue = UnrealEditorUtils::GetStructPropertyValuePtr<FName>(ThisProperty, ComponentPicker::NameComponent))
+							if (FName* MyValue = UnrealEditorUtils::GetPropertyMemberPtr<FName>(ThisProperty, ComponentPicker::NameComponent))
 							{
 								return FText::FromName(*MyValue);
 							}

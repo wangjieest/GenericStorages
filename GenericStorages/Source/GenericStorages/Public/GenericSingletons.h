@@ -38,7 +38,6 @@ class UGenericSingletons;
 namespace GenericSingletons
 {
 GENERICSTORAGES_API UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass = nullptr);
-GENERICSTORAGES_API UGenericSingletons* GetManager(UWorld* World);
 GENERICSTORAGES_API void SetWorldCleanup(FSimpleDelegate Cb, bool bEditorOnly = false);
 }  // namespace GenericSingletons
 
@@ -157,6 +156,8 @@ public:
 	}
 
 private:
+	static UGenericSingletons* GetManager(UWorld* World);
+
 	UPROPERTY(Transient)
 	TMap<UClass*, UObject*> Singletons;
 
