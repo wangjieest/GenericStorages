@@ -54,43 +54,47 @@ FName GetPropertyName(FProperty* InProperty)
 #	if 1
 	using ValueType = FName (*)(FProperty * Property);
 	using KeyType = const FFieldClass*;
-#		define DEF_PAIR_CELL(PropertyTypeName) TPairInitializer<const KeyType&, const ValueType&>(PropertyTypeName::StaticClass(), [](FProperty* Property) { return GetPropertyName<typename PropertyTypeName::TCppType>(); })
-#		define DEF_PAIR_CELL_CUSTOM(PropertyTypeName, ...) TPairInitializer<const KeyType&, const ValueType&>(PropertyTypeName::StaticClass(), [](FProperty* Property) { return __VA_ARGS__; })
+#		define GS_DEF_PAIR_CELL(PropertyTypeName) TPairInitializer<const KeyType&, const ValueType&>(PropertyTypeName::StaticClass(), [](FProperty* Property) { return GetPropertyName<typename PropertyTypeName::TCppType>(); })
+#		define GS_DEF_PAIR_CELL_CUSTOM(PropertyTypeName, ...) TPairInitializer<const KeyType&, const ValueType&>(PropertyTypeName::StaticClass(), [](FProperty* Property) { return __VA_ARGS__; })
 
-	static TMap<KeyType, ValueType> DispatchMap{
-		//
-		DEF_PAIR_CELL_CUSTOM(FStructProperty, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
-		DEF_PAIR_CELL(FByteProperty),
-		DEF_PAIR_CELL(FBoolProperty),
-		DEF_PAIR_CELL(FIntProperty),
-		DEF_PAIR_CELL(FUInt16Property),
-		DEF_PAIR_CELL(FInt16Property),
-		DEF_PAIR_CELL(FUInt32Property),
-		DEF_PAIR_CELL(FInt64Property),
-		DEF_PAIR_CELL(FUInt64Property),
-		DEF_PAIR_CELL(FFloatProperty),
-		DEF_PAIR_CELL(FDoubleProperty),
-		DEF_PAIR_CELL(FStrProperty),
-		DEF_PAIR_CELL(FNameProperty),
-		DEF_PAIR_CELL(FTextProperty),
-		DEF_PAIR_CELL_CUSTOM(FEnumProperty, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty())),
-		DEF_PAIR_CELL(FLazyObjectProperty),
-		DEF_PAIR_CELL(FSoftObjectProperty),
-		DEF_PAIR_CELL(FWeakObjectProperty),
-		DEF_PAIR_CELL(FInterfaceProperty),
-		DEF_PAIR_CELL_CUSTOM(FObjectProperty, GetPropertyName<UObject>()),
-		DEF_PAIR_CELL_CUSTOM(FClassProperty, GetPropertyName<UObject>()),
-		DEF_PAIR_CELL_CUSTOM(FSoftClassProperty, GetPropertyName<FSoftObjectPtr>()),
-		DEF_PAIR_CELL_CUSTOM(FArrayProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner).ToString())),
-		DEF_PAIR_CELL_CUSTOM(FSetProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp).ToString())),
-		DEF_PAIR_CELL_CUSTOM(FMapProperty,
-							 GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp).ToString()))
-		//
+	// clang-format off
+	static TMap<KeyType, ValueType> DispatchMap {
+		GS_DEF_PAIR_CELL_CUSTOM(FStructProperty, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
+		GS_DEF_PAIR_CELL(FBoolProperty),
+		GS_DEF_PAIR_CELL(FInt8Property),
+		GS_DEF_PAIR_CELL(FByteProperty),
+		GS_DEF_PAIR_CELL(FInt16Property),
+		GS_DEF_PAIR_CELL(FUInt16Property),
+		GS_DEF_PAIR_CELL(FIntProperty),
+		GS_DEF_PAIR_CELL(FUInt32Property),
+		GS_DEF_PAIR_CELL(FInt64Property),
+		GS_DEF_PAIR_CELL(FUInt64Property),
+		GS_DEF_PAIR_CELL(FFloatProperty),
+		GS_DEF_PAIR_CELL(FDoubleProperty),
+		GS_DEF_PAIR_CELL_CUSTOM(FEnumProperty, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty())),
+
+		GS_DEF_PAIR_CELL(FStrProperty),
+		GS_DEF_PAIR_CELL(FNameProperty),
+		GS_DEF_PAIR_CELL(FTextProperty),
+
+		GS_DEF_PAIR_CELL(FDelegateProperty),
+
+		GS_DEF_PAIR_CELL(FLazyObjectProperty),
+		GS_DEF_PAIR_CELL(FSoftObjectProperty),
+		GS_DEF_PAIR_CELL(FWeakObjectProperty),
+		GS_DEF_PAIR_CELL(FInterfaceProperty),
+		GS_DEF_PAIR_CELL_CUSTOM(FObjectProperty, GetPropertyName<UObject>()),
+		GS_DEF_PAIR_CELL_CUSTOM(FClassProperty, GetPropertyName<UObject>()),
+		GS_DEF_PAIR_CELL_CUSTOM(FSoftClassProperty, GetPropertyName<FSoftObjectPtr>()),
+
+		GS_DEF_PAIR_CELL_CUSTOM(FArrayProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner).ToString())),
+		GS_DEF_PAIR_CELL_CUSTOM(FSetProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp).ToString())),
+		GS_DEF_PAIR_CELL_CUSTOM(FMapProperty, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp).ToString()))
 	};
 	// clang-format on
 
-#		undef DEF_PAIR_CELL
-#		undef DEF_PAIR_CELL_CUSTOM
+#		undef GS_DEF_PAIR_CELL
+#		undef GS_DEF_PAIR_CELL_CUSTOM
 
 	if (auto Func = DispatchMap.Find(InProperty->GetClass()))
 	{
@@ -102,27 +106,29 @@ FName GetPropertyName(FProperty* InProperty)
 			else if (CastField<PropertyTypeName>(InProperty)) { return GetPropertyName<typename PropertyTypeName::TCppType>(); }
 
 	// clang-format off
-		if (FStructProperty* SubStructProperty = CastField<FStructProperty>(InProperty))
-		{
-			return *SubStructProperty->Struct->GetName();
-		}
-		DispathPropertyType(FByteProperty)
-			DispathPropertyType(FBoolProperty)
-			DispathPropertyType(FIntProperty)
-			DispathPropertyType(FUInt16Property)
-			DispathPropertyType(FInt16Property)
-			DispathPropertyType(FUInt32Property)
-			DispathPropertyType(FInt64Property)
-			DispathPropertyType(FUInt64Property)
-			DispathPropertyType(FFloatProperty)
-			DispathPropertyType(FDoubleProperty)
-			DispathPropertyType(FStrProperty)
-			DispathPropertyType(FNameProperty)
-			DispathPropertyType(FTextProperty)
-		else if (FEnumProperty* SubEnumProperty = CastField<FEnumProperty>(InProperty))
-		{
-			return GetPropertyName(SubEnumProperty->GetUnderlyingProperty());
-		}
+	if (FStructProperty* SubStructProperty = CastField<FStructProperty>(InProperty))
+	{
+		return *SubStructProperty->Struct->GetName();
+	}
+	DispathPropertyType(FBoolProperty)
+	DispathPropertyType(FInt8Property)
+	DispathPropertyType(FByteProperty)
+	DispathPropertyType(FInt16Property)
+	DispathPropertyType(FUInt16Property)
+	DispathPropertyType(FIntProperty)
+	DispathPropertyType(FUInt32Property)
+	DispathPropertyType(FInt64Property)
+	DispathPropertyType(FUInt64Property)
+	DispathPropertyType(FFloatProperty)
+	DispathPropertyType(FDoubleProperty)
+	DispathPropertyType(FDelegateProperty)
+	DispathPropertyType(FStrProperty)
+	DispathPropertyType(FNameProperty)
+	DispathPropertyType(FTextProperty)
+	else if (FEnumProperty* SubEnumProperty = CastField<FEnumProperty>(InProperty))
+	{
+		return GetPropertyName(SubEnumProperty->GetUnderlyingProperty());
+	}
 	// clang-format on
 	else if (CastField<FObjectPropertyBase>(InProperty))
 	{
@@ -183,46 +189,49 @@ FName GetPropertyName(FProperty* InProperty, EPropertyClass PropertyEnum, EPrope
 {
 	using KeyType = EPropertyClass;
 	using ValueType = FName (*)(FProperty * Property, EPropertyClass, EPropertyClass);
-#	define DEF_PAIR_CELL(Index) \
+#	define GS_DEF_PAIR_CELL(Index) \
 		TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EPropertyClass InValueEnum, EPropertyClass InKeyEnum) { return GetPropertyName<typename F##Index##Property ::TCppType>(); })
 
-#	define DEF_PAIR_CELL_CUSTOM(Index, ...) TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EPropertyClass InValueEnum, EPropertyClass InKeyEnum) { return __VA_ARGS__; })
+#	define GS_DEF_PAIR_CELL_CUSTOM(Index, ...) TPairInitializer<const KeyType&, const ValueType&>(KeyType::Index, [](FProperty* Property, EPropertyClass InValueEnum, EPropertyClass InKeyEnum) { return __VA_ARGS__; })
 
 	static TMap<KeyType, ValueType> DispatchMap{
-		//
-		DEF_PAIR_CELL(Byte),
-		DEF_PAIR_CELL(Int8),
-		DEF_PAIR_CELL(Int16),
-		DEF_PAIR_CELL(Int),
-		DEF_PAIR_CELL(UInt64),
-		DEF_PAIR_CELL(UInt16),
-		DEF_PAIR_CELL(UnsizedInt),
-		DEF_PAIR_CELL(UnsizedUInt),
-		DEF_PAIR_CELL(Double),
-		DEF_PAIR_CELL(Float),
-		DEF_PAIR_CELL(Bool),
-		DEF_PAIR_CELL(SoftClass),
-		DEF_PAIR_CELL(WeakObject),
-		DEF_PAIR_CELL(LazyObject),
-		DEF_PAIR_CELL(SoftObject),
-		DEF_PAIR_CELL(Interface),
-		DEF_PAIR_CELL(Name),
-		DEF_PAIR_CELL(Str),
-		DEF_PAIR_CELL_CUSTOM(Object, GetPropertyName<UObject>()),
-		DEF_PAIR_CELL_CUSTOM(Class, GetPropertyName<UObject>()),
-		DEF_PAIR_CELL_CUSTOM(Array, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner, InValueEnum).ToString())),
-		DEF_PAIR_CELL_CUSTOM(
-			Map,
-			GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp, InKeyEnum).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp, InValueEnum).ToString())),
-		DEF_PAIR_CELL_CUSTOM(Set, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp, InValueEnum).ToString())),
-		DEF_PAIR_CELL_CUSTOM(Struct, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
-		DEF_PAIR_CELL(Delegate),
-		//DEF_PAIR_CELL(InlineMulticastDelegate),
-		DEF_PAIR_CELL(Text),
-		DEF_PAIR_CELL_CUSTOM(Enum, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty()))};
+		GS_DEF_PAIR_CELL_CUSTOM(Struct, FName(*CastField<FStructProperty>(Property)->Struct->GetName())),
 
-#	undef DEF_PAIR_CELL
-#	undef DEF_PAIR_CELL_CUSTOM
+		GS_DEF_PAIR_CELL(Bool),
+		GS_DEF_PAIR_CELL(Int8),
+		GS_DEF_PAIR_CELL(Byte),
+		GS_DEF_PAIR_CELL(Int16),
+		GS_DEF_PAIR_CELL(UInt16),
+		GS_DEF_PAIR_CELL(Int),
+		GS_DEF_PAIR_CELL(UInt32),
+		GS_DEF_PAIR_CELL(UInt64),
+		GS_DEF_PAIR_CELL(UnsizedInt),
+		GS_DEF_PAIR_CELL(UnsizedUInt),
+		GS_DEF_PAIR_CELL(Float),
+		GS_DEF_PAIR_CELL(Double),
+		GS_DEF_PAIR_CELL_CUSTOM(Enum, GetPropertyName(CastField<FEnumProperty>(Property)->GetUnderlyingProperty())),
+		GS_DEF_PAIR_CELL(Str),
+		GS_DEF_PAIR_CELL(Name),
+		GS_DEF_PAIR_CELL(Text),
+
+		GS_DEF_PAIR_CELL(Delegate),
+		//GS_DEF_PAIR_CELL(InlineMulticastDelegate),
+
+		GS_DEF_PAIR_CELL(SoftClass),
+		GS_DEF_PAIR_CELL(WeakObject),
+		GS_DEF_PAIR_CELL(LazyObject),
+		GS_DEF_PAIR_CELL(SoftObject),
+		GS_DEF_PAIR_CELL(Interface),
+		GS_DEF_PAIR_CELL_CUSTOM(Object, GetPropertyName<UObject>()),
+		GS_DEF_PAIR_CELL_CUSTOM(Class, GetPropertyName<UObject>()),
+
+		GS_DEF_PAIR_CELL_CUSTOM(Array, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTArrayName(*GetPropertyName(CastField<FArrayProperty>(Property)->Inner, InValueEnum).ToString())),
+		GS_DEF_PAIR_CELL_CUSTOM(Map, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTMapName(*GetPropertyName(CastField<FMapProperty>(Property)->KeyProp, InKeyEnum).ToString(), *GetPropertyName(CastField<FMapProperty>(Property)->ValueProp, InValueEnum).ToString())),
+		GS_DEF_PAIR_CELL_CUSTOM(Set, GS_CLASS_TO_NAME::TTraitsTemplate<void>::GetTSetName(*GetPropertyName(CastField<FSetProperty>(Property)->ElementProp, InValueEnum).ToString())),
+	};
+
+#	undef GS_DEF_PAIR_CELL
+#	undef GS_DEF_PAIR_CELL_CUSTOM
 
 	if (auto Func = DispatchMap.Find(PropertyEnum))
 	{
@@ -306,15 +315,26 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 
 	// clang-format off
 	static TMap<FName, FEdGraphPinType> NativeMap{
+		{TEXT("bool"), GetPinType(UEdGraphSchema_K2::PC_Boolean)},
+		{TEXT("byte"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
+		{TEXT("char"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
 		{TEXT("uint8"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
 		{TEXT("int8"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
-		{TEXT("char"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
+
 		{TEXT("int"), GetPinType(UEdGraphSchema_K2::PC_Int)},
+		{TEXT("int16"), GetPinType(UEdGraphSchema_K2::PC_Int)},
+		{TEXT("uint16"), GetPinType(UEdGraphSchema_K2::PC_Int)},
 		{TEXT("int32"), GetPinType(UEdGraphSchema_K2::PC_Int)},
 		{TEXT("uint32"), GetPinType(UEdGraphSchema_K2::PC_Int)},
-		{TEXT("byte"), GetPinType(UEdGraphSchema_K2::PC_Byte)},
-		{TEXT("bool"), GetPinType(UEdGraphSchema_K2::PC_Boolean)},
+	#if ENGINE_MINOR_VERSION >= 22
+		{TEXT("int64"), GetPinType(UEdGraphSchema_K2::PC_Int64)},
+		{TEXT("uint64"), GetPinType(UEdGraphSchema_K2::PC_Int64)},
+	#endif
 		{TEXT("float"), GetPinType(UEdGraphSchema_K2::PC_Float)},
+#if 0
+		{TEXT("double"), GetPinType(UEdGraphSchema_K2::PC_Double)},
+#endif
+		{TEXT("delegate"), GetPinType(UEdGraphSchema_K2::PC_Delegate)},
 		{TEXT("name"), GetPinType(UEdGraphSchema_K2::PC_Name)},
 		{TEXT("text"), GetPinType(UEdGraphSchema_K2::PC_Text)},
 		{TEXT("string"), GetPinType(UEdGraphSchema_K2::PC_String)},
@@ -324,9 +344,7 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 		{TEXT("class"), GetPinType(UEdGraphSchema_K2::PC_Class, UObject::StaticClass())},
 		{TEXT("softclasspath"), GetPinType(UEdGraphSchema_K2::PC_SoftClass, UObject::StaticClass())},
 		{TEXT("scriptinterface"), GetPinType(UEdGraphSchema_K2::PC_Interface, UInterface::StaticClass())},
-	#if ENGINE_MINOR_VERSION >= 22
-		{TEXT("int64"), GetPinType(UEdGraphSchema_K2::PC_Int64)},
-	#endif
+
 	};
 	// clang-format on
 
@@ -358,42 +376,47 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 				operator FString() { return GetCaptureGroup(1); }
 			};
 
-#	define MATCH_PATTERN(x, bTemplate, bContainer) PinTypeFromString(FMyRegexMatcher(GetPatternImpl(TEXT(x), [] {}), TypeString.LeftChop(1).TrimEnd()), OutPinType, bTemplate, bContainer)
-			if (MATCH_PATTERN("TEnumAsByte", true, false))
+			// clang-format off
+#	define GS_GET_MATCHER(x) FMyRegexMatcher(GetPatternImpl(TEXT(#x), [] {}), TypeString.LeftChop(1).TrimEnd())
+			// clang-format on
+#	define GS_MATCH_PATTERN(x, t, c) PinTypeFromString(GS_GET_MATCHER(x), OutPinType, t, c)
+			if (GS_MATCH_PATTERN(TEnumAsByte, true, false))
 			{
+				ensure(false);
+				// OutPinType.PinCategory = UEdGraphSchema_K2::PC_Enum;
 			}
-			else if (MATCH_PATTERN("TSubclassOf", true, false))
+			else if (GS_MATCH_PATTERN(TSubclassOf, true, false))
 			{
 				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Class;
 			}
-			else if (MATCH_PATTERN("TSoftClassPtr", true, false))
+			else if (GS_MATCH_PATTERN(TSoftClassPtr, true, false))
 			{
 				OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftClass;
 			}
-			else if (MATCH_PATTERN("TSoftObjectPtr", true, false))
+			else if (GS_MATCH_PATTERN(TSoftObjectPtr, true, false))
 			{
 				OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftObject;
 			}
-			else if (MATCH_PATTERN("TWeakObjectPtr", true, false))
+			else if (GS_MATCH_PATTERN(TWeakObjectPtr, true, false))
 			{
 				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Object;
 				OutPinType.bIsWeakPointer = true;
 			}
-			else if (MATCH_PATTERN("TScriptInterface", true, false))
+			else if (GS_MATCH_PATTERN(TScriptInterface, true, false))
 			{
 				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Interface;
 			}
 			else if (!bInContainer)
 			{
-				if (MATCH_PATTERN("TArray", false, true))
+				if (GS_MATCH_PATTERN(TArray, false, true))
 				{
 					OutPinType.ContainerType = EPinContainerType::Array;
 				}
-				else if (MATCH_PATTERN("TSet", false, true))
+				else if (GS_MATCH_PATTERN(TSet, false, true))
 				{
 					OutPinType.ContainerType = EPinContainerType::Set;
 				}
-				else if (auto Matcher = FMyRegexMatcher(GetPatternImpl(TEXT("TMap"), [] {}), TypeString.LeftChop(1).TrimEnd()))
+				else if (auto Matcher = GS_GET_MATCHER(TMap))
 				{
 					FString Left;
 					FString Right;
@@ -409,7 +432,8 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 				}
 			}
 			return true;
-#	undef MATCH_PATTERN
+#	undef GS_MATCH_PATTERN
+#	undef GS_GET_MATCHER
 		}
 
 		if (auto Class = DynamicClass(TypeString))
@@ -489,7 +513,7 @@ FString GetDefaultValueOnType(const FEdGraphPinType& PinType)
 
 //////////////////////////////////////////////////////////////////////////
 
-void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer, void** ContainerAddr)
+void* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer, void** ContainerAddr)
 {
 	if (!PropertyHandle.IsValid())
 		return nullptr;
@@ -518,16 +542,16 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 				auto ParentParentHandle = ParentHandle->GetParentHandle();
 				auto ParentParentProperty = ParentParentHandle->GetProperty();
 
-				// Outer->[Struct...]->Container[CurIndex]
-				if (ensure(CastField<FStructProperty>(ParentParentProperty)))
+				// &Outer->[Struct...].Container[CurIndex]
+				if (ensureAlways(CastField<FStructProperty>(ParentParentProperty)))
 				{
-					void* ParentValueAddress = GetStructPropertyAddress(ParentParentHandle.ToSharedRef(), Outer);
+					void* ParentValueAddress = GetPropertyAddress(ParentParentHandle.ToSharedRef(), Outer);
 					ParentAddress = ParentParentProperty->ContainerPtrToValuePtr<void>(ParentValueAddress);
 				}
 			}
 			else
 			{
-				// Outer->Container[CurIndex]
+				// &Outer->Container[CurIndex]
 				ParentAddress = ParentContainer->ContainerPtrToValuePtr<void>(Outer);
 			}
 
@@ -566,18 +590,18 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 		else
 		{
 			auto Property = PropertyHandle->GetProperty();
-			if (ensure(CastField<FStructProperty>(Property)))
+			if (ensureAlways(CastField<FStructProperty>(Property)))
 			{
 				bool IsOutmost = GetPropOwnerUObject(Property)->IsA(UClass::StaticClass());
 				if (IsOutmost)
 				{
-					// Outer->Struct
+					// &Outer->Value
 					ValueAddress = Property->ContainerPtrToValuePtr<void>(Outer);
 				}
 				else
 				{
-					// Outer->[Struct...]->Struct
-					ParentAddress = GetStructPropertyAddress(ParentHandle.ToSharedRef(), Outer);
+					// &Outer->[Struct...].Value
+					ParentAddress = GetPropertyAddress(ParentHandle.ToSharedRef(), Outer);
 					ValueAddress = Property->ContainerPtrToValuePtr<void>(ParentAddress);
 				}
 			}
@@ -590,7 +614,7 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 	return ValueAddress;
 }
 
-GENERICSTORAGES_API void* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle)
+GENERICSTORAGES_API void* AccessPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle)
 {
 	do
 	{
@@ -617,21 +641,12 @@ void* GetPropertyMemberPtr(const TSharedPtr<IPropertyHandle>& StructPropertyHand
 		if (!StructProperty)
 			break;
 
-#	if 0
-		TArray<void*> RawData;
-		StructPropertyHandle->AccessRawData(RawData);
-		if (!RawData.Num())
-			break;
-
-		return RawData[0];
-#	else
-
 		TArray<UObject*> OuterObjects;
 		StructPropertyHandle->GetOuterObjects(OuterObjects);
 		if (OuterObjects.Num() != 1)
 			break;
 
-		void* StructAddress = GetStructPropertyAddress(StructPropertyHandle->AsShared(), OuterObjects[0]);
+		void* StructAddress = GetPropertyAddress(StructPropertyHandle->AsShared(), OuterObjects[0]);
 		if (!StructAddress)
 			break;
 
@@ -640,7 +655,6 @@ void* GetPropertyMemberPtr(const TSharedPtr<IPropertyHandle>& StructPropertyHand
 			break;
 
 		return MemberProerty->ContainerPtrToValuePtr<void>(StructAddress);
-#	endif
 
 	} while (0);
 	return nullptr;
