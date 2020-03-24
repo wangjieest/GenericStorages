@@ -109,7 +109,7 @@ public:  // C++
 	static T* TryGetSingleton(const UObject* WorldContextObject, const F& ConstructFunc)
 	{
 		static_assert(TIsDerivedFrom<typename TRemovePointer<decltype(ConstructFunc())>::Type, T>::IsDerived, "err");
-		auto Mgr = GenericSingletons::GetManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
+		auto Mgr = GetWlsManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
 		auto& Ptr = Mgr->Singletons.FindOrAdd(T::StaticClass());
 		if (!IsValid(Ptr))
 		{
@@ -156,7 +156,7 @@ public:
 	}
 
 private:
-	static UGenericSingletons* GetManager(UWorld* World);
+	static UGenericSingletons* GetWlsManager(UWorld* World);
 
 	UPROPERTY(Transient)
 	TMap<UClass*, UObject*> Singletons;
