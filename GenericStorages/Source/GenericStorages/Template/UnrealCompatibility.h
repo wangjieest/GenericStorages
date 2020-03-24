@@ -13,41 +13,41 @@
 #	if ENGINE_MINOR_VERSION <= 20
 namespace ITS
 {
-template<typename E>
-using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
-/*
-	GCC:
-	void foo() [with T = {type}]
-	clang:
-	void foo() [T = {type}]
-	MSVC:
-	void __cdecl foo<{type}>(void)
-	*/
+	template<typename E>
+	using is_scoped_enum = std::integral_constant<bool, std::is_enum<E>::value && !std::is_convertible<E, int>::value>;
+	/*
+		GCC:
+		void foo() [with T = {type}]
+		clang:
+		void foo() [T = {type}]
+		MSVC:
+		void __cdecl foo<{type}>(void)
+		*/
 #		if defined(_MSC_VER)
 #			define Z_TEMPLATE_PARAMETER_NAME_ __FUNCSIG__
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* __cdecl ITS::TypeStr<") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof(">(void)") - 1u;
 #		else
 #			define Z_TEMPLATE_PARAMETER_NAME_ __PRETTY_FUNCTION__
 #			if defined(__clang__)
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [T = ") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			else
-constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
-constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
+	constexpr unsigned int FRONT_SIZE = sizeof("static const char* ITS::TypeStr() [with T = ") - 1u;
+	constexpr unsigned int BACK_SIZE = sizeof("]") - 1u;
 #			endif
 #		endif
 
-template<typename EnumType>
-static const char* TypeStr(void)
-{
-	static_assert(std::is_enum<EnumType>::value, "err");
-	constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
-	static char typeName[size] = {};
-	memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
+	template<typename EnumType>
+	static const char* TypeStr(void)
+	{
+		static_assert(std::is_enum<EnumType>::value, "err");
+		constexpr int32 size = sizeof(Z_TEMPLATE_PARAMETER_NAME_) - FRONT_SIZE - BACK_SIZE;
+		static char typeName[size] = {};
+		memcpy(typeName, Z_TEMPLATE_PARAMETER_NAME_ + FRONT_SIZE, size - 1u);
 
-	return typeName;
-}
+		return typeName;
+	}
 }  // namespace ITS
 
 template<typename EnumType>
@@ -192,7 +192,7 @@ FORCEINLINE T* FindUField(const UStruct* Owner, FName FieldName)
 	return FindField<T>(Owner, FieldName);
 }
 
-template<typename T>
+template<typename T = FField>
 struct TFieldPath
 {
 public:
@@ -200,8 +200,8 @@ public:
 		: Prop(const_cast<T*>(InProp))
 	{
 	}
-	TFieldPath(T& InProp)
-		: Prop(&InProp)
+	TFieldPath(const T& InProp)
+		: Prop(const_cast<T*>(&InProp))
 	{
 	}
 
@@ -212,11 +212,25 @@ public:
 
 	explicit operator bool() const { return !!Prop; }
 	T* Get() const { return Prop; }
+
 	T& GetOwnerVariant() const { return *Prop; }
 	UClass* GetOwnerClass() const { return GetPropOwnerClass(Prop); }
 
+	bool IsA(const UClass* InClass) const { return Field && Field->IsA(InClass); }
+	template<typename T>
+	bool IsA() const
+	{
+		static_assert(sizeof(T) > 0, "T must not be an incomplete type");
+		return IsA(T::StaticClass());
+	}
+
 protected:
 	mutable T* Prop;
+};
+
+struct FFieldVariant : public TFieldPath<>
+{
+	using TFieldPath<>::TFieldPath;
 };
 
 template<typename T>
@@ -227,7 +241,7 @@ FORCEINLINE T* GetPropPtr(T* Prop)
 	return Prop;
 }
 template<typename T>
-FORCEINLINE T* GetPropPtr(TFieldPath<T>& Prop)
+FORCEINLINE T* GetPropPtr(const TFieldPath<T>& Prop)
 {
 	return Prop.Get();
 }

@@ -30,6 +30,7 @@ THE SOFTWARE.
 #	include "PropertyEditorModule.h"
 #	include "Editor/DataTablePickerCustomization.h"
 #	include "Editor/SClassPickerGraphPin.h"
+#	include "Editor/ComponentPickerCustomization.h"
 #endif
 
 class FGenericStoragesPlugin final : public IModuleInterface
@@ -72,6 +73,7 @@ public:
 			PropertyModule->RegisterCustomPropertyTypeLayout("DataTablePathPicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDataTablePathPickerCustomization::MakeInstance));
 			PropertyModule->RegisterCustomPropertyTypeLayout("DataTableRowNamePicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDataTableRowNamePickerCustomization::MakeInstance));
 			PropertyModule->RegisterCustomPropertyTypeLayout("DataTableRowPicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FDataTableRowPickerCustomization::MakeInstance));
+			PropertyModule->RegisterCustomPropertyTypeLayout("ComponentPicker", FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FComponentPickerCustomization::MakeInstance));
 			PropertyModule->NotifyCustomizationModuleChanged();
 		}
 #endif

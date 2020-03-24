@@ -133,23 +133,15 @@ FName GetPropertyName(FProperty* InProperty)
 			// FWeakObjectPtr
 			return GetPropertyName<FWeakObjectProperty::TCppType>();
 		}
+		// FClassProperty is a specialization of FObjectProperty with MetaClass
 		// Object
-		// 		else if (CastField<FClassProperty>(InProperty))
-		// 		{
-		// 			// UClassProperty is a specialization of UObjectProperty with MetaClass
-		// 			return GetPropertyName<UObject>();
-		// 		}
 		else if (CastField<FObjectProperty>(InProperty))
 		{
 			// UObject*
 			return GetPropertyName<UObject>();
 		}
+		// FSoftClassProperty is a specialization of FSoftObjectProperty with MetaClass
 		// SoftObject
-		// 		else if (CastField<FSoftClassProperty>(InProperty))
-		// 		{
-		// 			// USoftClassProperty is a specialization of USoftObjectProperty with MetaClass
-		// 			return GetPropertyName<FSoftObjectPtr>();
-		// 		}
 		else if (CastField<FSoftObjectProperty>(InProperty))
 		{
 			// FSoftObjectPtr
@@ -366,72 +358,46 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 				operator FString() { return GetCaptureGroup(1); }
 			};
 
-#	define GET_PATTERN(x) auto Matecher = FMyRegexMatcher(GetPatternImpl(TEXT(x), [] {}), TypeString.LeftChop(1).TrimEnd())
-
-			if (GET_PATTERN("TEnumAsByte"))
+#	define MATCH_PATTERN(x, bTemplate, bContainer) PinTypeFromString(FMyRegexMatcher(GetPatternImpl(TEXT(x), [] {}), TypeString.LeftChop(1).TrimEnd()), OutPinType, bTemplate, bContainer)
+			if (MATCH_PATTERN("TEnumAsByte", true, false))
 			{
-				if (!PinTypeFromString(Matecher, OutPinType, true))
-					break;
 			}
-			if (GET_PATTERN("TSubclassOf"))
+			else if (MATCH_PATTERN("TSubclassOf", true, false))
 			{
-				if (PinTypeFromString(Matecher, OutPinType, true))
-					OutPinType.PinCategory = UEdGraphSchema_K2::PC_Class;
-				else
-					break;
+				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Class;
 			}
-			if (GET_PATTERN("TSoftClassPtr"))
+			else if (MATCH_PATTERN("TSoftClassPtr", true, false))
 			{
-				if (PinTypeFromString(Matecher, OutPinType, true))
-					OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftClass;
-				else
-					break;
+				OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftClass;
 			}
-			if (GET_PATTERN("TSoftObjectPtr"))
+			else if (MATCH_PATTERN("TSoftObjectPtr", true, false))
 			{
-				if (PinTypeFromString(Matecher, OutPinType, true))
-					OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftObject;
-				else
-					break;
+				OutPinType.PinCategory = UEdGraphSchema_K2::PC_SoftObject;
 			}
-			if (GET_PATTERN("TWeakObjectPtr"))
+			else if (MATCH_PATTERN("TWeakObjectPtr", true, false))
 			{
-				if (PinTypeFromString(Matecher, OutPinType, true))
+				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Object;
+				OutPinType.bIsWeakPointer = true;
+			}
+			else if (MATCH_PATTERN("TScriptInterface", true, false))
+			{
+				OutPinType.PinCategory = UEdGraphSchema_K2::PC_Interface;
+			}
+			else if (!bInContainer)
+			{
+				if (MATCH_PATTERN("TArray", false, true))
 				{
-					OutPinType.PinCategory = UEdGraphSchema_K2::PC_Object;
-					OutPinType.bIsWeakPointer = true;
+					OutPinType.ContainerType = EPinContainerType::Array;
 				}
-				else
-					break;
-			}
-			if (GET_PATTERN("TScriptInterface"))
-			{
-				if (PinTypeFromString(Matecher, OutPinType, true))
-					OutPinType.PinCategory = UEdGraphSchema_K2::PC_Interface;
-				else
-					break;
-			}
-			if (!bInContainer)
-			{
-				if (GET_PATTERN("TArray"))
+				else if (MATCH_PATTERN("TSet", false, true))
 				{
-					if (PinTypeFromString(Matecher, OutPinType, false, true))
-						OutPinType.ContainerType = EPinContainerType::Array;
-					else
-						break;
+					OutPinType.ContainerType = EPinContainerType::Set;
 				}
-				if (GET_PATTERN("TSet"))
-				{
-					if (PinTypeFromString(Matecher, OutPinType, false, true))
-						OutPinType.ContainerType = EPinContainerType::Set;
-					else
-						break;
-				}
-				if (GET_PATTERN("TMap"))
+				else if (auto Matcher = FMyRegexMatcher(GetPatternImpl(TEXT("TMap"), [] {}), TypeString.LeftChop(1).TrimEnd()))
 				{
 					FString Left;
 					FString Right;
-					if (!FString(Matecher).Split(TEXT(","), &Left, &Right))
+					if (!FString(Matcher).Split(TEXT(","), &Left, &Right))
 						break;
 					if (!PinTypeFromString(Left, OutPinType, false, true))
 						break;
@@ -443,7 +409,7 @@ bool PinTypeFromString(FString TypeString, FEdGraphPinType& OutPinType, bool bIn
 				}
 			}
 			return true;
-#	undef GET_PATTERN
+#	undef MATCH_PATTERN
 		}
 
 		if (auto Class = DynamicClass(TypeString))
@@ -651,17 +617,45 @@ void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle
 	return ValueAddress;
 }
 
+GENERICSTORAGES_API void* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle)
+{
+	do
+	{
+		if (!PropertyHandle)
+			break;
+
+		TArray<void*> RawData;
+		PropertyHandle->AccessRawData(RawData);
+		if (!RawData.Num())
+			break;
+		return RawData[0];
+	} while (0);
+	return nullptr;
+}
+
 void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropertyHandle, FName MemberName)
 {
 	do
 	{
-		TArray<UObject*> OuterObjects;
-		StructPropertyHandle->GetOuterObjects(OuterObjects);
-		if (OuterObjects.Num() != 1)
+		if (!StructPropertyHandle)
 			break;
 
 		FStructProperty* StructProperty = CastField<FStructProperty>(StructPropertyHandle->GetProperty());
 		if (!StructProperty)
+			break;
+
+#	if 1
+		TArray<void*> RawData;
+		StructPropertyHandle->AccessRawData(RawData);
+		if (!RawData.Num())
+			break;
+
+		return RawData[0];
+#	else
+
+		TArray<UObject*> OuterObjects;
+		StructPropertyHandle->GetOuterObjects(OuterObjects);
+		if (OuterObjects.Num() != 1)
 			break;
 
 		void* StructAddress = GetStructPropertyAddress(StructPropertyHandle->AsShared(), OuterObjects[0]);
@@ -673,6 +667,8 @@ void* GetStructPropertyValuePtr(const TSharedPtr<IPropertyHandle>& StructPropert
 			break;
 
 		return MemberProerty->ContainerPtrToValuePtr<void>(StructAddress);
+#	endif
+
 	} while (0);
 	return nullptr;
 }
@@ -817,6 +813,7 @@ bool LoadTableTypes(const FString& ScanPath)
 
 FDatatableTypePicker::FDatatableTypePicker(TSharedPtr<IPropertyHandle> PropertyHandle)
 {
+	// Default Search Path
 	FilterPath = TEXT("/Game/DataTables");
 	Init(PropertyHandle);
 }

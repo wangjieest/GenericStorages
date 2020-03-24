@@ -25,59 +25,30 @@ THE SOFTWARE.
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CoreUObject.h"
 
-#include "Engine/DataTable.h"
-#include "Templates/SubclassOf.h"
-#include "UObject/WeakObjectPtr.h"
-#include "UObject/WeakObjectPtrTemplates.h"
+#include "Components/ActorComponent.h"
 
-#include "DataTablePicker.generated.h"
+#include "ComponentPicker.generated.h"
 
-//////////////////////////////////////////////////////////////////////////
 USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FDataTablePicker
+struct GENERICSTORAGES_API FComponentPicker
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	UDataTable* DataTable;
-};
-
-// Table+Row
-USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FDataTableRowPicker
-{
-	GENERATED_BODY()
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	UDataTable* DataTable = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	FName RowName;
-};
-
-USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FDataTablePathPicker
-{
-	GENERATED_BODY()
-public:
-	// SoftPath
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	TSoftObjectPtr<UDataTable> DataTablePath;
-};
-
-USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FDataTableRowNamePicker
-{
-	GENERATED_BODY()
-public:
-	// RowName
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	FName RowName;
+	UPROPERTY(EditAnywhere, Category = "Config")
+	FName ComponentName;
 
 #if WITH_EDITORONLY_DATA
-	// EditorOnly,Limit DataTable type
-	UPROPERTY(EditAnywhere, Category = "DataTablePicker")
-	TSoftObjectPtr<UDataTable> DataTablePath;
+	UPROPERTY(EditDefaultsOnly, Category = "Config")
+	TSubclassOf<UActorComponent> ComponentClass;
 #endif
+	operator FName() const { return ComponentName; }
+
+	UActorComponent* FindComponentByName(AActor* InActorz) const;
+	template<typename T>
+	T* FindComponentByName(AActor* InActor) const
+	{
+		return Cast<T>(FindComponentByName(InActor));
+	}
 };

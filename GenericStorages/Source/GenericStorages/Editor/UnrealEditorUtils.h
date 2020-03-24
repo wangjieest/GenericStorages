@@ -81,13 +81,24 @@ T* GetPropertyHandleUObjectValue(TSharedPtr<IPropertyHandle> PropertyHandle)
 }
 
 // TArray/TSet/TMap/Element
-GENERICSTORAGES_API void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer = nullptr, void** ContainerAddr = nullptr);
+GENERICSTORAGES_API void* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer, void** ContainerAddr = nullptr);
 template<typename StructType>
-StructType* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer = nullptr, void** ContainerAddr = nullptr, bool bEnsure = true)
+StructType* GetStructPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, UObject* Outer, void** ContainerAddr = nullptr, bool bEnsure = true)
 {
 	FStructProperty* StructProperty = PropertyHandle.IsValid() ? CastField<FStructProperty>(PropertyHandle->GetProperty()) : nullptr;
 	if (StructProperty && GetPropertyName<StructType>() == GetPropertyName(StructProperty))
 		return static_cast<StructType*>(GetStructPropertyAddress(PropertyHandle, Outer, ContainerAddr));
+	ensureAlways(!bEnsure);
+	return nullptr;
+}
+
+GENERICSTORAGES_API void* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle);
+template<typename StructType>
+StructType* GetPropertyAddress(const TSharedPtr<IPropertyHandle>& PropertyHandle, bool bEnsure = true)
+{
+	FStructProperty* StructProperty = PropertyHandle.IsValid() ? CastField<FStructProperty>(PropertyHandle->GetProperty()) : nullptr;
+	if (StructProperty && GetPropertyName<StructType>() == GetPropertyName(StructProperty))
+		return static_cast<StructType*>(GetPropertyAddress(PropertyHandle));
 	ensureAlways(!bEnsure);
 	return nullptr;
 }

@@ -44,10 +44,9 @@ enum Flag
 	ServerSide = 0x1,
 	ClientSide = 0x2,
 	Replicated = 0x4,
-
 	NameStable = 0x8,
 	Instanced = 0xF,
-	SystemInstanced = 0xF UMETA(Hidden),
+
 	BothSide = 0x3,
 };
 

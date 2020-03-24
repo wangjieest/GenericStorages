@@ -109,7 +109,7 @@ public:  // C++
 	template<typename T, typename F>
 	static T* TryGetSingleton(const UObject* WorldContextObject, const F& ConstructFunc)
 	{
-		static_assert(std::is_convertible<decltype(ConstructFunc()), T*>::value, "err");
+		static_assert(TIsDerivedFrom<typename TRemovePointer<decltype(ConstructFunc())>::Type, T>::IsDerived, "err");
 		auto Mgr = GenericSingletons::GetManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
 		auto& Ptr = Mgr->Singletons.FindOrAdd(T::StaticClass());
 		if (!IsValid(Ptr))
@@ -128,7 +128,7 @@ public:
 
 	static bool AsyncCreate(const UObject* BindedObject, const FString& InPath, FAsyncObjectCallback Cb);
 
-	// AOP(native only)
+	// AOP(compile time only), any advice for runtime dynamic AOP?
 	template<typename T = UObject>
 	static T* CreateInstance(const UObject* WorldContextObject, UClass* SubClass = nullptr)
 	{
@@ -136,7 +136,7 @@ public:
 		return TSingletonConstructAction<T>::CustomConstruct(WorldContextObject, SubClass);
 	}
 
-	// async AOP(native only)
+	// async AOP(compile time only)
 	template<typename T, typename F>
 	static bool AsyncCreate(const UObject* BindedObject, const FString& InPath, F&& f)
 	{
@@ -177,7 +177,7 @@ struct TSingletonConstructAction
 {
 	static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr)
 	{
-		static_assert(std::is_same<V, void>::value, "error");
+		static_assert(TIsSame<V, void>::Value, "error");
 		return UGenericSingletons::CreateInstanceImpl<T>(WorldContextObject, SubClass);
 	}
 };

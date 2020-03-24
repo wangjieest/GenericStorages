@@ -241,17 +241,24 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	UObject* Ptr = nullptr;
 	bool bIsActorClass = Class->IsChildOf(AActor::StaticClass());
+
+#if WITH_EDITOR
+	FName InstName = MakeUniqueObjectName(nullptr, Class, TEXT("GSInst_"));
+#else
+	FName InstName = NAME_None;
+#endif
+
 	if (!IsValid(World))
 	{
 		ensureAlwaysMsgf(!bIsActorClass, TEXT("world not existed!!!"));
 		auto Instance = GenericWorldSingletons::FindGameInstance();
 		if (ensure(Instance))
 		{
-			Ptr = NewObject<UObject>(Instance, Class);
+			Ptr = NewObject<UObject>(Instance, Class, InstName);
 		}
 		else
 		{
-			Ptr = NewObject<UObject>((UObject*)GetTransientPackage(), Class);
+			Ptr = NewObject<UObject>(GetTransientPackage(), Class, InstName);
 		}
 	}
 	else if (!bIsActorClass)
@@ -259,17 +266,19 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 #if !UE_SERVER
 		if (Class->IsChildOf(UUserWidget::StaticClass()))
 		{
-			Ptr = CreateWidget(World, Class);
+			Ptr = CreateWidget(World, Class, InstName);
 		}
 		else
 #endif
 		{
-			Ptr = NewObject<UObject>(World, Class);
+			Ptr = NewObject<UObject>(World, Class, InstName);
 		}
 	}
 	else
 	{
-		Ptr = World->SpawnActor<AActor>(Class);
+		FActorSpawnParameters ActorSpawnParameters;
+		ActorSpawnParameters.Name = InstName;
+		Ptr = World->SpawnActor<AActor>(Class, ActorSpawnParameters);
 	}
 	ensureAlways(IsValid(Ptr));
 
