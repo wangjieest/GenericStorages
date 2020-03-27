@@ -36,6 +36,57 @@ THE SOFTWARE.
 #include "WorldLocalStorages.h"
 
 //////////////////////////////////////////////////////////////////////////
+namespace GenericStorages
+{
+GENERICSTORAGES_API UGameInstance* FindGameInstance()
+{
+	UGameInstance* Instance = nullptr;
+#if WITH_EDITOR
+	if (GIsEditor)
+	{
+		ensureAlwaysMsgf(!GIsInitialLoad && GEngine, TEXT("Is it needed to get singleton before engine initialized?"));
+		UWorld* World = nullptr;
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			auto CurWorld = Context.World();
+			if (IsValid(CurWorld))
+			{
+				if (CurWorld->IsGameWorld())
+				{
+					if (Context.WorldType == EWorldType::PIE /*&& Context.PIEInstance == 0*/)
+					{
+						World = CurWorld;
+						break;
+					}
+
+					if (Context.WorldType == EWorldType::Game)
+					{
+						World = CurWorld;
+						break;
+					}
+
+					if (CurWorld->GetNetMode() == ENetMode::NM_Standalone || (CurWorld->GetNetMode() == ENetMode::NM_Client && Context.PIEInstance == 2))
+					{
+						World = CurWorld;
+						break;
+					}
+				}
+			}
+		}
+		Instance = World ? World->GetGameInstance() : nullptr;
+	}
+	else
+#endif
+	{
+		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
+		{
+			Instance = GameEngine->GameInstance;
+		}
+	}
+	return Instance;
+}
+
+}  // namespace GenericStorages
 namespace GenericSingletons
 {
 UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
@@ -248,7 +299,7 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 	if (!IsValid(World))
 	{
 		ensureAlwaysMsgf(!bIsActorClass, TEXT("world not existed!!!"));
-		auto Instance = WorldLocalStorages::FindGameInstance();
+		auto Instance = GenericStorages::FindGameInstance();
 		if (ensure(Instance))
 		{
 			Ptr = NewObject<UObject>(Instance, Class, InstName);

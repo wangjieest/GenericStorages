@@ -41,58 +41,15 @@ public:
 	TSharedPtr<void> Store;
 };
 
+namespace GenericStorages
+{
+GENERICSTORAGES_API UGameInstance* FindGameInstance();
+}  // namespace GenericStorages
+
 namespace WorldLocalStorages
 {
 template<typename T, uint8 N = 4, typename V = void>
 struct TGenericWorldLocalStorage;
-
-static inline UGameInstance* FindGameInstance()
-{
-	UGameInstance* Instance = nullptr;
-#if WITH_EDITOR
-	if (GIsEditor)
-	{
-		ensureAlwaysMsgf(!GIsInitialLoad && GEngine, TEXT("Is it needed to get singleton before engine initialized?"));
-		UWorld* World = nullptr;
-		for (const FWorldContext& Context : GEngine->GetWorldContexts())
-		{
-			auto CurWorld = Context.World();
-			if (IsValid(CurWorld))
-			{
-				if (CurWorld->IsGameWorld())
-				{
-					if (Context.WorldType == EWorldType::PIE /*&& Context.PIEInstance == 0*/)
-					{
-						World = CurWorld;
-						break;
-					}
-
-					if (Context.WorldType == EWorldType::Game)
-					{
-						World = CurWorld;
-						break;
-					}
-
-					if (CurWorld->GetNetMode() == ENetMode::NM_Standalone || (CurWorld->GetNetMode() == ENetMode::NM_Client && Context.PIEInstance == 2))
-					{
-						World = CurWorld;
-						break;
-					}
-				}
-			}
-		}
-		Instance = World ? World->GetGameInstance() : nullptr;
-	}
-	else
-#endif
-	{
-		if (UGameEngine* GameEngine = Cast<UGameEngine>(GEngine))
-		{
-			Instance = GameEngine->GameInstance;
-		}
-	}
-	return Instance;
-}
 
 struct FWorldLocalStorageOps
 {
@@ -171,7 +128,7 @@ protected:
 		{
 			if (!IsValid(World))
 			{
-				auto Instance = FindGameInstance();
+				auto Instance = GenericStorages::FindGameInstance();
 				ensureMsgf(GIsEditor || Instance != nullptr, TEXT("Instance Error"));
 				auto Obj = NewObject<T>();
 				Ptr = Obj;
@@ -235,7 +192,7 @@ protected:
 			Obj->Store = SP;
 			if (!IsValid(World))
 			{
-				auto Instance = FindGameInstance();
+				auto Instance = GenericStorages::FindGameInstance();
 				ensureMsgf(GIsEditor || Instance != nullptr, TEXT("Instance Error"));
 				if (Instance)
 				{
