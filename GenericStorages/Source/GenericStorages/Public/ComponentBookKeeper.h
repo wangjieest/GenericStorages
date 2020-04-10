@@ -45,6 +45,7 @@ enum Flag
 	ClientSide = 0x2,
 	Replicated = 0x4,
 	NameStable = 0x8,
+
 	Instanced = 0xF,
 
 	BothSide = 0x3,

@@ -37,7 +37,7 @@ class UGenericWorldLocalStore : public UObject
 {
 	GENERATED_BODY()
 public:
-	// TODO : AddReferencedObjects
+	// TODO : AddReferencedObjects or use TStrongObjectPtr
 	TSharedPtr<void> Store;
 };
 
