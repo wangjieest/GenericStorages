@@ -8,7 +8,7 @@
 namespace ClassStorage
 {
 // each type (USTRUCT or UCLASS) would has a storage place in the type-tree for lookup fast
-template<typename T>
+template<typename T, bool bAutoLock = true>
 struct TClassStorageImpl
 {
 protected:
@@ -123,11 +123,12 @@ protected:
 		return &Ptr;
 	};
 
-	DataPtrType Find(const UStruct* Class, bool bDisableAdd = true) const
+	DataPtrType Find(const UStruct* Class, bool bNewDisable = true) const
 	{
-		// as first query, no more add needed
-		if (bDisableAdd)
-			EnableAdd(false);
+		// auto lock : at first query, no more data needed
+		if (bAutoLock && bNewDisable)
+			SetEnableState(false);
+
 		checkSlow(Class);
 
 		if (auto FindPtr = FastLookupTable.Find(Class))
@@ -155,7 +156,7 @@ protected:
 		UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::Clear"));
 		FastLookupTable.Reset();
 		RegisteredData.Reset();
-		EnableAdd(true);
+		SetEnableState(true);
 
 		for (const auto& a : PersistentData)
 		{
@@ -178,12 +179,8 @@ protected:
 
 public:
 	void Cleanup() { Clear(); }
-	bool EnableAdd(bool bNewEanbled) const
-	{
-		bool bEanbled = bEnableAdd;
-		bEnableAdd = bNewEanbled;
-		return bEanbled;
-	}
+
+	void SetEnableState(bool bNewEanbled) const { bEnableAdd = bNewEanbled; }
 
 	StorageDataType* FindData(const UStruct* Class) const
 	{
@@ -231,7 +228,7 @@ public:
 			else
 			{
 				if (bEnable)
-					EnableAdd(true);
+					SetEnableState(true);
 				if (auto DataPtr = Add(RegisteredData, Class))
 				{
 					Fun((*DataPtr)->Data, false);

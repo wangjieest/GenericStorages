@@ -16,7 +16,7 @@ class UActorComponent;
 class APlayerController;
 
 UENUM(BlueprintType, meta = (Bitflags, UseEnumValuesAsMaskValuesInEditor = true))
-namespace ECompCreateMode
+namespace EComponentDeferredMode
 {
 enum Type
 {
@@ -28,7 +28,7 @@ enum Type
 
 	BothSide = 0x3 UMETA(Hidden),
 };
-}  // namespace ECompCreateMode
+}  // namespace EComponentDeferredMode
 
 namespace EAttachedType
 {
@@ -39,6 +39,7 @@ enum Flag
 	Replicated = 0x4,
 	NameStable = 0x8,
 
+	// means that it will create on bothside, and has a statble name path for repliction
 	Instanced = 0xF,
 
 	BothSide = 0x3,
@@ -61,13 +62,16 @@ class GENERICSTORAGES_API UDeferredComponentRegistry final : public UBlueprintFu
 public:
 	UDeferredComponentRegistry();
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (CallableWithoutWorldContext = true))
-	static void RegisterDeferredComponents(TSubclassOf<AActor> Class,
-										   const TSet<TSubclassOf<UActorComponent>>& RegDatas,
-										   bool bPersistent = true,
-										   UPARAM(DisplayName = "CreateMode", meta = (Bitmask, BitmaskEnum = "ECompCreateMode")) uint8 Mode = 0);
+	static void AddDeferredComponents(TSubclassOf<AActor> Class,
+									  const TSet<TSubclassOf<UActorComponent>>& RegDatas,
+									  bool bPersistent = true,
+									  UPARAM(DisplayName = "CreateMode", meta = (Bitmask, BitmaskEnum = "EComponentDeferredMode")) uint8 Mode = 0);
 
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (CallableWithoutWorldContext = true))
-	static void RegisterDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent = true, UPARAM(DisplayName = "CreateMode", meta = (Bitmask, BitmaskEnum = "ECompCreateMode")) uint8 Mode = 0);
+	static void AddDeferredComponent(TSubclassOf<AActor> Class,
+									 TSubclassOf<UActorComponent> ComponentClass,
+									 bool bPersistent = true,
+									 UPARAM(DisplayName = "CreateMode", meta = (Bitmask, BitmaskEnum = "EComponentDeferredMode")) uint8 Mode = 0);
 
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (CallableWithoutWorldContext = true))
 	static void EnableAdd(bool bNewEnabled);

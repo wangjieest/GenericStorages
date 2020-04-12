@@ -72,7 +72,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 		return TmpFlags;
 	}
 
-	void RegisterDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
+	void AddDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 	{
 		if (!RegDatas.Num())
 			return;
@@ -89,7 +89,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 		});
 	}
 
-	void RegisterDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
+	void AddDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
 	{
 		if (ensureAlways(Class.Get() && RegClass))
 		{
@@ -168,8 +168,10 @@ void AppendDeferredComponents(AActor& Actor)
 				}
 			}
 
-			// FIXME need this?
-			if (!Actor.FindComponentByClass(CurClass))
+#if WITH_EDITOR
+			// FIXME : need to check if exist one?
+			if (ensure(!Actor.FindComponentByClass(CurClass)))
+#endif
 			{
 				UE_LOG(LogTemp, Log, TEXT("DeferredComponentRegistry::AppendDeferredComponents %s : %s"), *Actor.GetName(), *RegData.RegClass->GetName());
 				QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_SpawnComponents);
@@ -234,19 +236,19 @@ UDeferredComponentRegistry::UDeferredComponentRegistry()
 	}
 }
 
-void UDeferredComponentRegistry::RegisterDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
+void UDeferredComponentRegistry::AddDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_Registers);
-	DeferredComponentRegistry::Storage.RegisterDeferredComponents(Class, RegDatas, bPersistent, Mode);
+	DeferredComponentRegistry::Storage.AddDeferredComponents(Class, RegDatas, bPersistent, Mode);
 }
 
-void UDeferredComponentRegistry::RegisterDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
+void UDeferredComponentRegistry::AddDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_Register);
-	DeferredComponentRegistry::Storage.RegisterDeferredComponent(Class, RegClass, bPersistent, Mode);
+	DeferredComponentRegistry::Storage.AddDeferredComponent(Class, RegClass, bPersistent, Mode);
 }
 
 void UDeferredComponentRegistry::EnableAdd(bool bNewEnabled)
 {
-	DeferredComponentRegistry::Storage.EnableAdd(bNewEnabled);
+	DeferredComponentRegistry::Storage.SetEnableState(bNewEnabled);
 }

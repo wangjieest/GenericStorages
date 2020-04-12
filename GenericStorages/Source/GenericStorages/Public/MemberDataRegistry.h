@@ -6,32 +6,32 @@
 
 #include "UnrealCompatibility.h"
 
-#include "MemberComposition.generated.h"
+#include "MemberDataRegistry.generated.h"
 
 USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FMemberCompositionDataBase
+struct GENERICSTORAGES_API FMemberDataRegistryTag
 {
 	GENERATED_BODY()
 public:
-	FMemberCompositionDataBase();
-	~FMemberCompositionDataBase();
-	FMemberCompositionDataBase(FMemberCompositionDataBase&& Other) = default;
-	FMemberCompositionDataBase& operator=(FMemberCompositionDataBase&& Other) = default;
-	FMemberCompositionDataBase(const FMemberCompositionDataBase& Other) = default;
-	FMemberCompositionDataBase& operator=(const FMemberCompositionDataBase& Other) = default;
+	FMemberDataRegistryTag();
+	~FMemberDataRegistryTag();
+	FMemberDataRegistryTag(FMemberDataRegistryTag&& Other) = default;
+	FMemberDataRegistryTag& operator=(FMemberDataRegistryTag&& Other) = default;
+	FMemberDataRegistryTag(const FMemberDataRegistryTag& Other) = default;
+	FMemberDataRegistryTag& operator=(const FMemberDataRegistryTag& Other) = default;
 
 protected:
 	FWeakObjectPtr Outer;
-	friend struct FMemberComposition;
+	friend struct FMemberDataRegistry;
 };
 
-#define STATIC_VERIFY_STORAGE_TYPE(T) static_assert(TIsDerivedFrom<T, FMemberCompositionDataBase>::IsDerived, "err")
+#define STATIC_VERIFY_STORAGE_TYPE(T) static_assert(TIsDerivedFrom<T, FMemberDataRegistryTag>::IsDerived, "err")
 
 //////////////////////////////////////////////////////////////////////////
 
 // Obj and Prop
 USTRUCT()
-struct GENERICSTORAGES_API FMemberCompositionStorageType
+struct GENERICSTORAGES_API FMemberDataRegistryType
 {
 	GENERATED_BODY()
 public:
@@ -50,24 +50,24 @@ public:
 };
 
 UCLASS(Transient)
-class UMemberCompositionStorage : public UObject
+class UMemberDataRegistryStorage : public UObject
 {
 	GENERATED_BODY()
 public:
 	UPROPERTY(Transient)
-	TMap<UScriptStruct*, FMemberCompositionStorageType> DataStore;
+	TMap<UScriptStruct*, FMemberDataRegistryType> DataStore;
 };
 
 //////////////////////////////////////////////////////////////////////////
 
-struct GENERICSTORAGES_API FMemberComposition
+struct GENERICSTORAGES_API FMemberDataRegistry
 {
 public:
 	template<typename T>
 	static T* GetStorage(const UObject* WorldContextObj = nullptr)
 	{
 		STATIC_VERIFY_STORAGE_TYPE(T);
-		if (FMemberCompositionStorageType* Found = GetStorageCell(T::StaticStruct(), WorldContextObj))
+		if (FMemberDataRegistryType* Found = GetStorageCell(T::StaticStruct(), WorldContextObj))
 		{
 			return Found->GetDataPtr<T>();
 		}
@@ -92,7 +92,7 @@ public:
 		static FName TypeName = PropName;
 		ensure(TypeName == PropName);
 #endif
-		static auto Prop = FMemberComposition::FindStructProperty<C, T>(MemberStructName);
+		static auto Prop = FMemberDataRegistry::FindStructProperty<C, T>(MemberStructName);
 		check(Object && Prop);
 		if (!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 		{
@@ -118,8 +118,8 @@ protected:
 		return TheProp;
 	}
 
-	static FMemberCompositionStorageType* GetStorageCell(UScriptStruct* Struct, const UObject* WorldContextObj = nullptr);
+	static FMemberDataRegistryType* GetStorageCell(UScriptStruct* Struct, const UObject* WorldContextObj = nullptr);
 	static bool SetStorageCell(UScriptStruct* Struct, UObject* Object, FStructProperty* Prop, bool bReplaceExist);
 };
 
-#define MEMBER_DATA_BIND(Class, Member) FMemberComposition::RegitserStorage<Class, decltype(Class::Member)>(this, GET_MEMBER_NAME_CHECKED(Class, Member), true)
+#define MEMBER_DATA_BIND(Class, Member) FMemberDataRegistry::RegitserStorage<Class, decltype(Class::Member)>(this, GET_MEMBER_NAME_CHECKED(Class, Member), true)

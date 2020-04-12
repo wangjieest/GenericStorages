@@ -39,7 +39,7 @@ FORCEINLINE UEnum* DynamicEnum(const FString& EnumName)
 }
 
 template<typename T, typename = void>
-struct TSingletonConstructAction;
+struct TGenericConstructionAOP;
 // static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr);
 
 DECLARE_DELEGATE_OneParam(FAsyncObjectCallback, class UObject*);
@@ -80,14 +80,14 @@ public:  // C++
 		if (IsValid(Ptr))
 			return Ptr;
 
-		return bCreate ? TryGetSingleton<T>(WorldContextObject, [&] { return TSingletonConstructAction<T>::CustomConstruct(WorldContextObject, nullptr); }) : nullptr;
+		return bCreate ? TryGetSingleton<T>(WorldContextObject, [&] { return TGenericConstructionAOP<T>::CustomConstruct(WorldContextObject, nullptr); }) : nullptr;
 	}
 
 	template<typename T, typename F>
 	static T* TryGetSingleton(const UObject* WorldContextObject, const F& ConstructFunc)
 	{
 		static_assert(TIsDerivedFrom<typename TRemovePointer<decltype(ConstructFunc())>::Type, T>::IsDerived, "err");
-		auto Mgr = GetWlsManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
+		auto Mgr = GetWorldLocalManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
 		auto& Ptr = Mgr->Singletons.FindOrAdd(T::StaticClass());
 		if (!IsValid(Ptr))
 		{
@@ -110,7 +110,7 @@ public:
 	static T* CreateInstance(const UObject* WorldContextObject, UClass* SubClass = nullptr)
 	{
 		check(!SubClass || ensureAlways(SubClass->IsChildOf<T>()));
-		return TSingletonConstructAction<T>::CustomConstruct(WorldContextObject, SubClass);
+		return TGenericConstructionAOP<T>::CustomConstruct(WorldContextObject, SubClass);
 	}
 
 	// async AOP(compile time only)
@@ -127,20 +127,12 @@ public:
 		return Handle.IsValid();
 	}
 
+public:
 	template<typename T>
 	static FString GetTypedNameSafe(const T* Obj)
 	{
 		return Obj ? Obj->GetName() : T::StaticClass()->GetName();
 	}
-
-private:
-	static UGenericSingletons* GetWlsManager(UWorld* World);
-
-	UPROPERTY(Transient)
-	TMap<UClass*, UObject*> Singletons;
-
-	template<typename T, typename>
-	friend struct TSingletonConstructAction;
 
 	static UObject* CreateInstanceImpl(const UObject* WorldContextObject, UClass* SubClass);
 	template<typename T>
@@ -149,10 +141,16 @@ private:
 		check(!SubClass || ensureAlways(SubClass->IsChildOf<T>()));
 		return (T*)UGenericSingletons::CreateInstanceImpl(WorldContextObject, SubClass ? SubClass : T::StaticClass());
 	}
+
+private:
+	static UGenericSingletons* GetWorldLocalManager(UWorld* World);
+
+	UPROPERTY(Transient)
+	TMap<UClass*, UObject*> Singletons;
 };
 
 template<typename T, typename V>
-struct TSingletonConstructAction
+struct TGenericConstructionAOP
 {
 	static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr)
 	{

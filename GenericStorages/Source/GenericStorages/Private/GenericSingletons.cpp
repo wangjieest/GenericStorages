@@ -149,7 +149,7 @@ void SetWorldCleanup(FSimpleDelegate Cb, bool EditorOnly)
 }
 }  // namespace GenericSingletons
 
-UGenericSingletons* UGenericSingletons::GetWlsManager(UWorld* World)
+UGenericSingletons* UGenericSingletons::GetWorldLocalManager(UWorld* World)
 {
 	return WorldLocalStorages::GetObject<UGenericSingletons>(World);
 }
@@ -190,7 +190,7 @@ UObject* UGenericSingletons::RegisterAsSingletonImpl(UObject* Object, const UObj
 		UE_LOG(LogTemp, Warning, TEXT("UGenericSingletons::RegisterAsSingleton Error"));
 		return nullptr;
 	}
-	auto Mgr = GetWlsManager(World);
+	auto Mgr = GetWorldLocalManager(World);
 	auto ObjectClass = Object->GetClass();
 
 	UObject* LastPtr = nullptr;
@@ -234,7 +234,7 @@ UObject* UGenericSingletons::GetSingletonImpl(UClass* Class, const UObject* Worl
 		RegClass = Class;
 
 	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
-	auto Mgr = GetWlsManager(World);
+	auto Mgr = GetWorldLocalManager(World);
 	UObject*& Ptr = Mgr->Singletons.FindOrAdd(RegClass);
 #if 0
 	UE_LOG(LogTemp, Log, TEXT("UGenericSingletons::GetSingleton %s(%p) -> %s -> %s(%p)"),
