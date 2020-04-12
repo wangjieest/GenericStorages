@@ -7,15 +7,15 @@
 #include "Engine/EngineTypes.h"
 #include "Templates/SubclassOf.h"
 
-#include "ObjectRegistry.generated.h"
+#include "ObjectPattern.generated.h"
 
 template<typename T>
-struct TEachObjectHelper;
+struct TEachObjectPattern;
 
 using FWeakObjectArray = TArray<FWeakObjectPtr>;
 
 USTRUCT()
-struct GENERICSTORAGES_API FObjectRegistryType
+struct GENERICSTORAGES_API FObjectPatternType
 {
 	GENERATED_BODY()
 public:
@@ -37,12 +37,12 @@ public:
 //////////////////////////////////////////////////////////////////////////
 
 UCLASS(Transient)
-class GENERICSTORAGES_API UObjectRegistry : public UBlueprintFunctionLibrary
+class GENERICSTORAGES_API UObjectPattern : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 protected:
-	UObjectRegistry();
-	static UObjectRegistry* Get(const UObject* Obj);
+	UObjectPattern();
+	static UObjectPattern* Get(const UObject* Obj);
 
 	static UClass* FindFirstNativeClass(UClass* Class);
 
@@ -108,7 +108,7 @@ public:
 	}
 
 protected:
-	friend class UComponentRegistry;
+	friend class UComponentPattern;
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "GetObject", WorldContext = "WorldContextObj", HidePin = "WorldContextObj", DeterminesOutputType = "Class", DynamicOutputParam))
 	static UObject* GetObject(const UObject* WorldContextObj, UClass* Class);
 
@@ -130,7 +130,7 @@ protected:
 	static auto NativeIterator()
 	{
 		auto Index = GetTypeID<T>();
-		static_assert(TIsDerivedFrom<T, TEachObjectHelper<T>>::IsDerived, "err");
+		static_assert(TIsDerivedFrom<T, TEachObjectPattern<T>>::IsDerived, "err");
 		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
 		check(Index);
 		return NativeIterator(Index);
@@ -139,9 +139,9 @@ protected:
 
 	//////////////////////////////////////////////////////////////////////////
 	template<typename T>
-	friend struct TEachObjectHelper;
+	friend struct TEachObjectPattern;
 	template<typename T>
-	friend struct TSingleObjectHelper;
+	friend struct TSingleObjectPattern;
 	template<typename T>
 	static void Register(T* Obj)
 	{
@@ -229,7 +229,7 @@ private:
 	void AddObjectToRegistry(UObject* Object, UClass* InNativeClass);
 	void RemoveObjectFromRegistry(UObject* Object, UClass* InNativeClass);
 	UPROPERTY()
-	TMap<UClass*, FObjectRegistryType> Binddings;
+	TMap<UClass*, FObjectPatternType> Binddings;
 
 private:
 	static bool AddClassToRegistry(UObject* Object, UClass* InNativeClass, int32& ID);
@@ -252,7 +252,7 @@ private:
 };
 
 template<typename T, typename F>
-void UObjectRegistry::EachObject(const UObject* WorldContextObj, const F& f)
+void UObjectPattern::EachObject(const UObject* WorldContextObj, const F& f)
 {
 	if (!EditorIsGameWorld(WorldContextObj))
 		return;
@@ -283,28 +283,28 @@ void UObjectRegistry::EachObject(const UObject* WorldContextObj, const F& f)
 }
 
 template<typename T>
-int32 UObjectRegistry::TypeID;
+int32 UObjectPattern::TypeID;
 template<typename T>
-TWeakObjectPtr<T> UObjectRegistry::TypeObject;
+TWeakObjectPtr<T> UObjectPattern::TypeObject;
 
 //////////////////////////////////////////////////////////////////////////
 template<typename T>
-struct TEachObjectHelper
+struct TEachObjectPattern
 {
 protected:
-	static auto Ctor(T* This) { return UObjectRegistry::Register(This); }
-	static auto Dtor(T* This) { return UObjectRegistry::Unregister(This); }
+	static auto Ctor(T* This) { return UObjectPattern::Register(This); }
+	static auto Dtor(T* This) { return UObjectPattern::Unregister(This); }
 };
 
 template<typename T>
-struct TSingleObjectHelper
+struct TSingleObjectPattern
 {
 protected:
-	static auto Ctor(T* This) { return UObjectRegistry::SetObject<T>(This); }
+	static auto Ctor(T* This) { return UObjectPattern::SetObject<T>(This); }
 	static auto Dtor(T* This)
 	{
 #if WITH_EDITOR
-		return UObjectRegistry::UnsetObject<T>(This);
+		return UObjectPattern::UnsetObject<T>(This);
 #endif
 	}
 };

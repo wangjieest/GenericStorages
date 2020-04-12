@@ -1,27 +1,27 @@
 // Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
 
-#include "ComponentBookKeeper.h"
+#include "DeferredComponentRegistry.h"
 
-#include "BookKeeperConfig.h"
 #include "ClassDataStorage.h"
+#include "DeferredComponentConfig.h"
 #include "Engine/Engine.h"
 #include "Engine/NetConnection.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GenericSingletons.h"
 #include "Misc/MessageDialog.h"
 #include "Stats/Stats2.h"
 #include "Templates/SharedPointer.h"
 #include "UObject/ObjectMacros.h"
 #include "UObject/PropertyPortFlags.h"
 #include "UObject/UObjectGlobals.h"
-#include "GenericSingletons.h"
 
 #if WITH_EDITOR
 #	include "Editor.h"
 #endif
 
 //////////////////////////////////////////////////////////////////////////
-namespace ComponentBookKeeper
+namespace DeferredComponentRegistry
 {
 struct FRegClassData
 {
@@ -72,7 +72,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 		return TmpFlags;
 	}
 
-	void RegisterAutoSpawnComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
+	void RegisterDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 	{
 		if (!RegDatas.Num())
 			return;
@@ -89,7 +89,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 		});
 	}
 
-	void RegisterAutoSpawnComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
+	void RegisterDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
 	{
 		if (ensureAlways(Class.Get() && RegClass))
 		{
@@ -103,7 +103,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 
 ClassDataStorage Storage;
 
-void AppendDeferComponents(AActor& Actor)
+void AppendDeferredComponents(AActor& Actor)
 {
 #if WITH_EDITOR
 	if (!Actor.GetWorld()->IsGameWorld())
@@ -139,7 +139,7 @@ void AppendDeferComponents(AActor& Actor)
 #endif
 
 	auto CurClass = Actor.GetClass();
-	QUICK_SCOPE_CYCLE_COUNTER(STAT_ComponentBookKeeper_AppendDeferComponents);
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_AppendDeferredComponents);
 	for (auto It = Storage.CreateIterator(CurClass); It; ++It)
 	{
 		auto CurPtr = *It;
@@ -171,8 +171,8 @@ void AppendDeferComponents(AActor& Actor)
 			// FIXME need this?
 			if (!Actor.FindComponentByClass(CurClass))
 			{
-				UE_LOG(LogTemp, Log, TEXT("ComponentBookKeeper::AppendDeferComponents %s : %s"), *Actor.GetName(), *RegData.RegClass->GetName());
-				QUICK_SCOPE_CYCLE_COUNTER(STAT_ComponentBookKeeper_CreateDataCompoents);
+				UE_LOG(LogTemp, Log, TEXT("DeferredComponentRegistry::AppendDeferredComponents %s : %s"), *Actor.GetName(), *RegData.RegClass->GetName());
+				QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_SpawnComponents);
 				FName CompName = *FString::Printf(TEXT("%s_%s"), PrefixName, *RegData.RegClass->GetName());
 				// no need AddOwnedComponent as NewObject does
 				UActorComponent* ActorComp = NewObject<UActorComponent>(&Actor, RegData.RegClass, *CompName.ToString());
@@ -196,7 +196,7 @@ void AppendDeferComponents(AActor& Actor)
 			}
 			else
 			{
-				UE_LOG(LogTemp, Warning, TEXT("ComponentBookKeeper::AppendDeferComponents Skip CompClass %s For Actor %s"), *GetNameSafe(RegData.RegClass), *GetNameSafe(&Actor));
+				UE_LOG(LogTemp, Warning, TEXT("DeferredComponentRegistry::AppendDeferComponents Skip CompClass %s For Actor %s"), *GetNameSafe(RegData.RegClass), *GetNameSafe(&Actor));
 			}
 		}
 	}
@@ -224,29 +224,29 @@ void BeginListen()
 		TOnComponentInitialized<AActor>::Bind();
 	}
 }
-}  // namespace ComponentBookKeeper
+}  // namespace DeferredComponentRegistry
 
-UComponentBookKeeper::UComponentBookKeeper()
+UDeferredComponentRegistry::UDeferredComponentRegistry()
 {
 	if (HasAnyFlags(RF_ClassDefaultObject))
 	{
-		ComponentBookKeeper::BeginListen();
+		DeferredComponentRegistry::BeginListen();
 	}
 }
 
-void UComponentBookKeeper::RegisterAutoSpawnComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
+void UDeferredComponentRegistry::RegisterDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 {
-	QUICK_SCOPE_CYCLE_COUNTER(STAT_ComponentBookKeeper_Registers);
-	ComponentBookKeeper::Storage.RegisterAutoSpawnComponents(Class, RegDatas, bPersistent, Mode);
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_Registers);
+	DeferredComponentRegistry::Storage.RegisterDeferredComponents(Class, RegDatas, bPersistent, Mode);
 }
 
-void UComponentBookKeeper::RegisterAutoSpawnComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
+void UDeferredComponentRegistry::RegisterDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
 {
-	QUICK_SCOPE_CYCLE_COUNTER(STAT_ComponentBookKeeper_Register);
-	ComponentBookKeeper::Storage.RegisterAutoSpawnComponent(Class, RegClass, bPersistent, Mode);
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_Register);
+	DeferredComponentRegistry::Storage.RegisterDeferredComponent(Class, RegClass, bPersistent, Mode);
 }
 
-void UComponentBookKeeper::EnableAdd(bool bNewEnabled)
+void UDeferredComponentRegistry::EnableAdd(bool bNewEnabled)
 {
-	ComponentBookKeeper::Storage.EnableAdd(bNewEnabled);
+	DeferredComponentRegistry::Storage.EnableAdd(bNewEnabled);
 }

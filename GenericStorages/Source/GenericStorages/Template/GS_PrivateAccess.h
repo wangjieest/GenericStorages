@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-#define GS_PRIVATEACCESSER_MEMBER(Class, Member, ...)                                           \
+#define GS_PRIVATEACCESS_MEMBER(Class, Member, ...)                                             \
 	namespace PrivateAccess                                                                     \
 	{                                                                                           \
 	using MemberPtr##Class##Member##Type = __VA_ARGS__;                                         \
@@ -20,7 +20,7 @@
 	auto& Member(const Class& obj) { return const_cast<Class&>(obj).*Access##Class##Member(); } \
 	}
 
-#define GS_PRIVATEACCESSER_FUNCTION(Class, FuncName, ...)                                                                           \
+#define GS_PRIVATEACCESS_FUNCTION(Class, FuncName, ...)                                                                             \
 	namespace PrivateAccess                                                                                                         \
 	{                                                                                                                               \
 	using FuncPtr##Class##FuncName##Type = __VA_ARGS__;                                                                             \

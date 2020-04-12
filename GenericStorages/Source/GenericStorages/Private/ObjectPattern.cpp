@@ -1,29 +1,29 @@
 // Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
 
-#include "ObjectRegistry.h"
+#include "ObjectPattern.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GenericSingletons.h"
 #include "UnrealCompatibility.h"
 
-FCriticalSection UObjectRegistry::Critical;
+FCriticalSection UObjectPattern::Critical;
 
-UObjectRegistry::FCSLock423::FCSLock423()
+UObjectPattern::FCSLock423::FCSLock423()
 {
 #if ENGINE_MINOR_VERSION >= 23
-	UObjectRegistry::Critical.Lock();
+	UObjectPattern::Critical.Lock();
 #endif
 }
 
-UObjectRegistry::FCSLock423::~FCSLock423()
+UObjectPattern::FCSLock423::~FCSLock423()
 {
 #if ENGINE_MINOR_VERSION >= 23
-	UObjectRegistry::Critical.Unlock();
+	UObjectPattern::Critical.Unlock();
 #endif
 }
 
-namespace ObjectRegistry
+namespace ObjectPattern
 {
 template<typename F>
 void EachClass(UObject* Object, UClass* StopClass, const F& f)
@@ -57,19 +57,19 @@ void EachClass(UObject* Object, const F& f)
 	}
 }
 
-TArray<FObjectRegistryType> Storage = {{}};
+TArray<FObjectPatternType> Storage = {{}};
 auto AllocNewStorage(int32& Index)
 {
 	if (Index == 0)
 	{
-		Index = Storage.Add(FObjectRegistryType{MakeShared<FWeakObjectArray>()});
+		Index = Storage.Add(FObjectPatternType{MakeShared<FWeakObjectArray>()});
 	}
 	return Index;
 }
 TMap<TWeakObjectPtr<UClass>, int32> ClassToID;
-}  // namespace ObjectRegistry
+}  // namespace ObjectPattern
 
-UClass* UObjectRegistry::FindFirstNativeClass(UClass* Class)
+UClass* UObjectPattern::FindFirstNativeClass(UClass* Class)
 {
 	for (; Class; Class = Class->GetSuperClass())
 	{
@@ -82,7 +82,7 @@ UClass* UObjectRegistry::FindFirstNativeClass(UClass* Class)
 }
 
 #if WITH_EDITOR
-bool UObjectRegistry::EditorIsGameWorld(const UObject* WorldContextObj)
+bool UObjectPattern::EditorIsGameWorld(const UObject* WorldContextObj)
 {
 	if (IsRunningCommandlet() || !UObjectInitialized() || IsEngineExitRequested())
 		return false;
@@ -106,13 +106,13 @@ bool UObjectRegistry::EditorIsGameWorld(const UObject* WorldContextObj)
 }
 #endif
 
-FWeakObjectArray::TIterator FObjectRegistryType::CreateIterator()
+FWeakObjectArray::TIterator FObjectPatternType::CreateIterator()
 {
 	check(IsValid());
 	return Objects->CreateIterator();
 }
 
-void UObjectRegistry::SetObject(UObject* Object, UClass* StopClass)
+void UObjectPattern::SetObject(UObject* Object, UClass* StopClass)
 {
 	if (!EditorIsGameWorld(Object))
 		return;
@@ -121,7 +121,7 @@ void UObjectRegistry::SetObject(UObject* Object, UClass* StopClass)
 	if (StopClass)
 	{
 		check(Object->IsA(StopClass));
-		ObjectRegistry::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
+		ObjectPattern::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
 			auto& Ref = RefObjects.FindOrAdd(CurClass);
 			ensureMsgf(!Ref.IsValid(), TEXT("%s"), *GetNameSafe(Object));
 			Ref = Object;
@@ -129,7 +129,7 @@ void UObjectRegistry::SetObject(UObject* Object, UClass* StopClass)
 	}
 	else
 	{
-		ObjectRegistry::EachClass(Object, [&](auto CurClass) {
+		ObjectPattern::EachClass(Object, [&](auto CurClass) {
 			auto& Ref = RefObjects.FindOrAdd(CurClass);
 			ensureMsgf(!Ref.IsValid(), TEXT("%s"), *GetNameSafe(Object));
 			Ref = Object;
@@ -137,11 +137,11 @@ void UObjectRegistry::SetObject(UObject* Object, UClass* StopClass)
 	}
 }
 
-FWeakObjectArray::TIterator UObjectRegistry::NativeIterator(int32 Index)
+FWeakObjectArray::TIterator UObjectPattern::NativeIterator(int32 Index)
 {
-	if (ensure(Index > 0 && Index < ObjectRegistry::Storage.Num()))
+	if (ensure(Index > 0 && Index < ObjectPattern::Storage.Num()))
 	{
-		return ObjectRegistry::Storage[Index].CreateIterator();
+		return ObjectPattern::Storage[Index].CreateIterator();
 	}
 	else
 	{
@@ -150,14 +150,14 @@ FWeakObjectArray::TIterator UObjectRegistry::NativeIterator(int32 Index)
 	}
 }
 
-UObjectRegistry::UObjectRegistry()
+UObjectPattern::UObjectPattern()
 {
 	static bool bListened = false;
 	if (!bListened)
 	{
 		bListened = true;
 		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
-			for (auto It = ObjectRegistry::ClassToID.CreateIterator(); It;)
+			for (auto It = ObjectPattern::ClassToID.CreateIterator(); It;)
 			{
 				if (!It->Key.IsValid())
 					It.RemoveCurrent();
@@ -174,7 +174,7 @@ UObjectRegistry::UObjectRegistry()
 	}
 }
 
-UObjectRegistry* UObjectRegistry::Get(const UObject* Obj)
+UObjectPattern* UObjectPattern::Get(const UObject* Obj)
 {
 	if (!UObjectInitialized() || IsEngineExitRequested())
 		return nullptr;
@@ -182,23 +182,23 @@ UObjectRegistry* UObjectRegistry::Get(const UObject* Obj)
 #if WITH_EDITOR
 	if (GIsEditor)
 	{
-		return UGenericSingletons::GetSingleton<UObjectRegistry>(Obj);
+		return UGenericSingletons::GetSingleton<UObjectPattern>(Obj);
 	}
 	else
 #endif
 	{
-		return UGenericSingletons::GetSingleton<UObjectRegistry>(nullptr);
+		return UGenericSingletons::GetSingleton<UObjectPattern>(nullptr);
 	}
 }
 
-TArray<UObject*> UObjectRegistry::AllObject(const UObject* WorldContextObj, UClass* Class)
+TArray<UObject*> UObjectPattern::AllObject(const UObject* WorldContextObj, UClass* Class)
 {
 	TArray<UObject*> Ret;
 	EachObject(WorldContextObj, Class, [&](UObject* Obj) { Ret.Add(Obj); });
 	return Ret;
 }
 
-void UObjectRegistry::EachObject(const UObject* WorldContextObj, UClass* Class, const TFunctionRef<void(UObject*)>& f)
+void UObjectPattern::EachObject(const UObject* WorldContextObj, UClass* Class, const TFunctionRef<void(UObject*)>& f)
 {
 	if (!EditorIsGameWorld(WorldContextObj))
 		return;
@@ -220,16 +220,16 @@ void UObjectRegistry::EachObject(const UObject* WorldContextObj, UClass* Class, 
 	}
 }
 
-int32 UObjectRegistry::GetTypeID(UClass* Class)
+int32 UObjectPattern::GetTypeID(UClass* Class)
 {
-	if (ensure(Class && ObjectRegistry::ClassToID.Contains(Class)))
+	if (ensure(Class && ObjectPattern::ClassToID.Contains(Class)))
 	{
-		return ObjectRegistry::ClassToID[Class];
+		return ObjectPattern::ClassToID[Class];
 	}
 	return 0;
 }
 
-UObject* UObjectRegistry::GetObject(const UObject* WorldContextObj, UClass* Class)
+UObject* UObjectPattern::GetObject(const UObject* WorldContextObj, UClass* Class)
 {
 	if (!EditorIsGameWorld(WorldContextObj))
 		return nullptr;
@@ -239,21 +239,21 @@ UObject* UObjectRegistry::GetObject(const UObject* WorldContextObj, UClass* Clas
 	return nullptr;
 }
 
-bool UObjectRegistry::AddClassToRegistry(UObject* Object, UClass* StopClass, int32& ID)
+bool UObjectPattern::AddClassToRegistry(UObject* Object, UClass* StopClass, int32& ID)
 {
 	if (Object->GetClass() == StopClass)
 	{
-		ID = ObjectRegistry::AllocNewStorage(ObjectRegistry::ClassToID.FindOrAdd(StopClass));
+		ID = ObjectPattern::AllocNewStorage(ObjectPattern::ClassToID.FindOrAdd(StopClass));
 		return true;
 	}
 	{
 		FCSLock423 Lock;
-		ObjectRegistry::EachClass(Object, StopClass, [&](auto CurClass) { ObjectRegistry::AllocNewStorage(ObjectRegistry::ClassToID.FindOrAdd(CurClass)); });
+		ObjectPattern::EachClass(Object, StopClass, [&](auto CurClass) { ObjectPattern::AllocNewStorage(ObjectPattern::ClassToID.FindOrAdd(CurClass)); });
 		return false;
 	}
 }
 
-bool UObjectRegistry::RemoveClassFromRegistry(UObject* Object, UClass* StopClass)
+bool UObjectPattern::RemoveClassFromRegistry(UObject* Object, UClass* StopClass)
 {
 	if (!EditorIsGameWorld(Object))
 		return true;
@@ -264,11 +264,11 @@ bool UObjectRegistry::RemoveClassFromRegistry(UObject* Object, UClass* StopClass
 	if (!IsValid(Class) || Class->GetFName().IsNone() || Class->GetName().StartsWith(TEXT("SKEL_")))
 		return true;
 #endif
-	auto Count = ObjectRegistry::ClassToID.Remove(Class);
+	auto Count = ObjectPattern::ClassToID.Remove(Class);
 	return ensure(Count > 0);
 }
 
-void UObjectRegistry::AddObjectToRegistry(UObject* Object, UClass* StopClass)
+void UObjectPattern::AddObjectToRegistry(UObject* Object, UClass* StopClass)
 {
 	// 	if (!EditorIsGameWorld(Object))
 	// 		return;
@@ -276,15 +276,15 @@ void UObjectRegistry::AddObjectToRegistry(UObject* Object, UClass* StopClass)
 	FCSLock423 Lock;
 	check(!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject));
 
-	ObjectRegistry::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
+	ObjectPattern::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
 #if WITH_EDITOR
-		check(ObjectRegistry::ClassToID.Contains(CurClass));
-		check(ObjectRegistry::Storage.IsValidIndex(ObjectRegistry::ClassToID[CurClass]));
+		check(ObjectPattern::ClassToID.Contains(CurClass));
+		check(ObjectPattern::Storage.IsValidIndex(ObjectPattern::ClassToID[CurClass]));
 #endif
-		FObjectRegistryType& Found = Binddings.FindOrAdd(CurClass);
+		FObjectPatternType& Found = Binddings.FindOrAdd(CurClass);
 		if (!Found.Objects)
 		{
-			Found.Objects = ObjectRegistry::Storage[ObjectRegistry::ClassToID.FindChecked(CurClass)].Objects;
+			Found.Objects = ObjectPattern::Storage[ObjectPattern::ClassToID.FindChecked(CurClass)].Objects;
 		}
 #if WITH_EDITOR
 		ensure(Found.Objects.IsValid() && !Found.Objects->Contains(Object));
@@ -293,7 +293,7 @@ void UObjectRegistry::AddObjectToRegistry(UObject* Object, UClass* StopClass)
 	});
 }
 
-void UObjectRegistry::RemoveObjectFromRegistry(UObject* Object, UClass* StopClass)
+void UObjectPattern::RemoveObjectFromRegistry(UObject* Object, UClass* StopClass)
 {
 	// 	if (!EditorIsGameWorld(Object))
 	// 		return;
@@ -303,7 +303,7 @@ void UObjectRegistry::RemoveObjectFromRegistry(UObject* Object, UClass* StopClas
 	check(!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject));
 
 	auto ObjectClass = Object->GetClass();
-	ObjectRegistry::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
+	ObjectPattern::EachClass(Object, StopClass->GetSuperClass(), [&](auto CurClass) {
 		if (auto Found = Binddings.Find(CurClass))
 		{
 			Found->Remove(Object);

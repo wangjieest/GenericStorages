@@ -148,37 +148,72 @@ public:
 	}
 };
 
-TUniquePtr<FObjectDataStorage> Mgr;
+TUniquePtr<FObjectDataStorage> GlobalMgr;
 
-static TUniquePtr<FObjectDataStorage>& GetStorage(bool bCreate = false)
+TUniquePtr<FObjectDataStorage>& GetStorage(bool bCreate = false)
 {
-	if (bCreate && !Mgr)
+	if (bCreate && !GlobalMgr)
 	{
-		Mgr = MakeUnique<FObjectDataStorage>();
+		GlobalMgr = MakeUnique<FObjectDataStorage>();
 		FCoreDelegates::OnPreExit.AddLambda([] {
-			if (ensureAlways(Mgr))
+			if (ensureAlways(GlobalMgr))
 			{
-				Mgr.Reset();
+				GlobalMgr.Reset();
 			}
 		});
 	}
-	return Mgr;
+	return GlobalMgr;
 }
 }  // namespace ObjectDataRegistry
 
-void UObjectDataRegisterUtil::OnActorDestroyed(AActor* InActor)
+void* FObjectDataRegistry::FindDataPtr(const UObject* Obj, FName Key)
+{
+	if (auto& Mgr = ObjectDataRegistry::GetStorage())
+	{
+		return Mgr->GetObjectData(Obj, Key);
+	}
+	return nullptr;
+}
+
+void* FObjectDataRegistry::GetDataPtr(const UObject* Obj, FName Key, const TFunctionRef<TSharedPtr<void>()>& Func)
+{
+	void* Ret = nullptr;
+	if (auto& Mgr = ObjectDataRegistry::GetStorage(true))
+	{
+		Ret = Mgr->GetObjectData(Obj, Key);
+		if (!Ret)
+		{
+			auto Data = Func();
+			Ret = Data.Get();
+			if (auto Actor = Cast<AActor>(Obj))
+			{
+				auto CDO = GetMutableDefault<UObjectDataRegistryHelper>();
+				const_cast<AActor*>(Actor)->OnDestroyed.AddUniqueDynamic(CDO, &UObjectDataRegistryHelper::OnActorDestroyed);
+			}
+			Mgr->AddObjectData(Obj, Key, MoveTemp(Data));
+		}
+	}
+	return Ret;
+}
+
+bool FObjectDataRegistry::DelDataPtr(const UObject* Obj, FName Key)
+{
+	if (auto& Mgr = ObjectDataRegistry::GetStorage())
+	{
+		return Mgr->RemoveObjectData(Obj, Key);
+	}
+	return false;
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+void UObjectDataRegistryHelper::OnActorDestroyed(AActor* InActor)
 {
 	if (auto& Mgr = ObjectDataRegistry::GetStorage())
 		Mgr->RemoveObject(FWeakObjectPtr(InActor));
 }
 
-void UObjectDataRegisterUtil::SetOnDestroyed(AActor* InActor)
-{
-	if (InActor)
-		InActor->OnDestroyed.AddUniqueDynamic(GetMutableDefault<UObjectDataRegisterUtil>(), &UObjectDataRegisterUtil::OnActorDestroyed);
-}
-
-DEFINE_FUNCTION(UObjectDataRegisterUtil::execGetObjectData)
+DEFINE_FUNCTION(UObjectDataRegistryHelper::execGetObjectData)
 {
 	P_GET_OBJECT(UObject, Obj);
 	P_GET_UBOOL(bWriteData);
@@ -221,7 +256,7 @@ DEFINE_FUNCTION(UObjectDataRegisterUtil::execGetObjectData)
 	}
 }
 
-DEFINE_FUNCTION(UObjectDataRegisterUtil::execDeleteObjectData)
+DEFINE_FUNCTION(UObjectDataRegistryHelper::execDelObjectData)
 {
 	P_GET_OBJECT(UObject, Obj);
 	Stack.MostRecentProperty = nullptr;
@@ -233,44 +268,7 @@ DEFINE_FUNCTION(UObjectDataRegisterUtil::execDeleteObjectData)
 	}
 }
 
-void UObjectDataRegisterUtil::DeleteObjectDataByName(const UObject* KeyObj, FName Name)
+void UObjectDataRegistryHelper::DeleteObjectDataByName(const UObject* KeyObj, FName Name)
 {
-	FObjectDataRegitstry::DelDataPtr(KeyObj, Name);
-}
-
-void* FObjectDataRegitstry::FindDataPtr(const UObject* Obj, FName Key)
-{
-	if (auto& Mgr = ObjectDataRegistry::GetStorage())
-	{
-		return Mgr->GetObjectData(Obj, Key);
-	}
-	return nullptr;
-}
-
-void* FObjectDataRegitstry::GetDataPtr(const UObject* Obj, FName Key, const TFunctionRef<TSharedPtr<void>()>& Func)
-{
-	void* Ret = nullptr;
-	if (auto& Mgr = ObjectDataRegistry::GetStorage(true))
-	{
-		Ret = Mgr->GetObjectData(Obj, Key);
-		if (!Ret)
-		{
-			auto Data = Func();
-			Ret = Data.Get();
-			if (auto Actor = Cast<AActor>(Obj))
-				UObjectDataRegisterUtil::SetOnDestroyed(const_cast<AActor*>(Actor));
-
-			Mgr->AddObjectData(Obj, Key, MoveTemp(Data));
-		}
-	}
-	return Ret;
-}
-
-bool FObjectDataRegitstry::DelDataPtr(const UObject* Obj, FName Key)
-{
-	if (auto& Mgr = ObjectDataRegistry::GetStorage())
-	{
-		return Mgr->RemoveObjectData(Obj, Key);
-	}
-	return false;
+	FObjectDataRegistry::DelDataPtr(KeyObj, Name);
 }

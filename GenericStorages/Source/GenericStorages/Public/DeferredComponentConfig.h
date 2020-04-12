@@ -6,16 +6,17 @@
 
 #include "AI/NavigationSystemBase.h"
 #include "Engine/World.h"
-#include "Templates/SubclassOf.h"
 #include "GS_TypeTraits.h"
+#include "Templates/SubclassOf.h"
 
 class AActor;
 class UActorComponent;
 
-namespace ComponentBookKeeper
+namespace DeferredComponentRegistry
 {
-GENERICSTORAGES_API void AppendDeferComponents(AActor& Actor);
+GENERICSTORAGES_API void AppendDeferredComponents(AActor& Actor);
 
+// Default Hook On PostInitializeComponents or OnActorSpawned
 template<typename T, typename V = void>
 struct TOnComponentInitialized
 {
@@ -33,18 +34,19 @@ struct TOnComponentInitialized
 			// PostInitializeComponents
 			static auto Delegate = MoveTemp(UHackNavigationSystemBase::OnActorRegisteredDelegate());
 			UHackNavigationSystemBase::OnActorRegisteredDelegate().BindLambda([](AActor& Actor) {
-				AppendDeferComponents(Actor);
+				AppendDeferredComponents(Actor);
 				Delegate.Execute(Actor);
 			});
 		}
 		else
 		{
 			// OnActorSpawned
-			FCoreUObjectDelegates::PostLoadMapWithWorld.AddLambda([](UWorld* World) { World->AddOnActorSpawnedHandler(FOnActorSpawned::FDelegate::CreateLambda([](AActor* a) { AppendDeferComponents(*a); })); });
+			FCoreUObjectDelegates::PostLoadMapWithWorld.AddLambda([](UWorld* World) { World->AddOnActorSpawnedHandler(FOnActorSpawned::FDelegate::CreateLambda([](AActor* a) { AppendDeferredComponents(*a); })); });
 		}
 	}
 };
 
+// Modify Engine : Hook In OnComponentInitialized
 template<typename T>
 struct TOnComponentInitialized<T, VoidType<decltype(&T::SetOnComponentInitializedDelegate)>>
 {
@@ -52,8 +54,8 @@ struct TOnComponentInitialized<T, VoidType<decltype(&T::SetOnComponentInitialize
 	static void Bind()
 	{
 		// add notify code in engine source in :InitializeComponents
-		T::SetOnComponentInitializedDelegate(TBaseDelegate<void, AActor&>::CreateStatic(&AppendDeferComponents));
+		T::SetOnComponentInitializedDelegate(TBaseDelegate<void, AActor&>::CreateStatic(&AppendDeferredComponents));
 	}
 };
 
-}  // namespace ComponentBookKeeper
+}  // namespace DeferredComponentRegistry

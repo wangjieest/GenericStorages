@@ -6,12 +6,12 @@
 
 #include "Components/ActorComponent.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "ObjectRegistry.h"
+#include "ObjectPattern.h"
 
-#include "ComponentRegistry.generated.h"
+#include "ComponentPattern.generated.h"
 
 UCLASS(Transient)
-class GENERICSTORAGES_API UComponentRegistry final : public UBlueprintFunctionLibrary
+class GENERICSTORAGES_API UComponentPattern final : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:
@@ -19,14 +19,14 @@ public:
 	static void EachComponent(const UObject* WorldContextObj, const F& f)
 	{
 		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
-		UObjectRegistry::EachObject<T>(WorldContextObj, f);
+		UObjectPattern::EachObject<T>(WorldContextObj, f);
 	}
 
 	template<typename T>
 	static T* GetComponent(const UObject* WorldContextObject)
 	{
 		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
-		return UObjectRegistry::GetObject<T>(WorldContextObject);
+		return UObjectPattern::GetObject<T>(WorldContextObject);
 	}
 
 protected:
@@ -34,36 +34,36 @@ protected:
 	static TArray<UActorComponent*> AllComponent(const UObject* WorldContextObj, TSubclassOf<UActorComponent> Class)
 	{
 		TArray<UActorComponent*> Ret;
-		UObjectRegistry::EachObject(WorldContextObj, Class, [&](auto a) { Ret.Add(static_cast<UActorComponent*>(a)); });
+		UObjectPattern::EachObject(WorldContextObj, Class, [&](auto a) { Ret.Add(static_cast<UActorComponent*>(a)); });
 		return Ret;
 	}
 
 	UFUNCTION(BlueprintCallable, meta = (DisplayName = "GetComponent", WorldContext = "WorldContextObj", HidePin = "WorldContextObj", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UActorComponent* GetComponent(const UObject* WorldContextObj, TSubclassOf<UActorComponent> Class) { return static_cast<UActorComponent*>(UObjectRegistry::GetObject(WorldContextObj, Class)); }
+	static UActorComponent* GetComponent(const UObject* WorldContextObj, TSubclassOf<UActorComponent> Class) { return static_cast<UActorComponent*>(UObjectPattern::GetObject(WorldContextObj, Class)); }
 };
 
 template<typename T, typename V = void>
-struct TEachComponentRegister : public TEachObjectHelper<T>
+struct TEachComponentPattern : public TEachObjectPattern<T>
 {
-	TEachComponentRegister()
+	TEachComponentPattern()
 	{
 		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
 		Ctor(static_cast<T*>(this));
 	}
-	~TEachComponentRegister() { Dtor(static_cast<T*>(this)); }
+	~TEachComponentPattern() { Dtor(static_cast<T*>(this)); }
 
 protected:
-	using TEachObjectHelper<T>::Ctor;
-	using TEachObjectHelper<T>::Dtor;
+	using TEachObjectPattern<T>::Ctor;
+	using TEachObjectPattern<T>::Dtor;
 };
 
 template<typename T, typename V = void>
-struct TSingleComponentRegister : public TSingleObjectHelper<T>
+struct TSingleComponentPattern : public TSingleObjectPattern<T>
 {
-	TSingleComponentRegister()
+	TSingleComponentPattern()
 	{
 		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
 		Ctor(static_cast<T*>(this));
 	}
-	~TSingleComponentRegister() { Dtor(static_cast<T*>(this)); }
+	~TSingleComponentPattern() { Dtor(static_cast<T*>(this)); }
 };
