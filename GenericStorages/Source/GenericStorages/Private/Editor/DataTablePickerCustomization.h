@@ -1,16 +1,17 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #include "CoreMinimal.h"
 
 #if WITH_EDITOR
-#	include "CoreUObject.h"
+#include "CoreUObject.h"
 
-#	include "DataTableEditorUtils.h"
-#	include "UnrealEditorUtils.h"
-#	include "IDetailCustomization.h"
-#	include "IPropertyTypeCustomization.h"
-#	include "Templates/SubclassOf.h"
+#include "DataTableEditorUtils.h"
+#include "Editor/UnrealEditorUtils.h"
+#include "IDetailCustomization.h"
+#include "IPropertyTypeCustomization.h"
+#include "Templates/SubclassOf.h"
+#include "UnrealCompatibility.h"
 
 class UScriptStruct;
 class FDataTablePickerCustomization : public IPropertyTypeCustomization

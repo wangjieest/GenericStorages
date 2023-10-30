@@ -1,4 +1,4 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #include "DeferredComponentRegistry.h"
 
@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GenericSingletons.h"
+#include "GenericStoragesLog.h"
 #include "Misc/MessageDialog.h"
 #include "Stats/Stats2.h"
 #include "Templates/SharedPointer.h"
@@ -17,61 +18,14 @@
 #include "UObject/UObjectGlobals.h"
 
 #if WITH_EDITOR
-#	include "Editor.h"
+#include "Editor.h"
 #endif
 
 //////////////////////////////////////////////////////////////////////////
 namespace DeferredComponentRegistry
 {
-struct FRegClassData
-{
-	TSubclassOf<UActorComponent> RegClass;
-	uint8 RegFlags;
-
-	// AddUnique
-	inline bool operator==(const FRegClassData& Ohter) const { return Ohter.RegClass == RegClass; }
-};
-using FRegClassDataArray = TArray<FRegClassData>;
 struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataArray>
 {
-	uint8 GetMode(uint8 InFlags, TSubclassOf<UActorComponent> InClass)
-	{
-		auto TmpFlags = InFlags;
-
-		auto CDO = InClass.GetDefaultObject();
-		const bool bIsReplicated = CDO->GetIsReplicated();
-		const bool bIsNameStable = CDO->IsNameStableForNetworking();
-		if (!TmpFlags)
-		{
-			if (bIsReplicated)
-			{
-				TmpFlags = EAttachedType::ServerSide | EAttachedType::Replicated;
-				if (bIsNameStable)
-					TmpFlags |= EAttachedType::NameStable | EAttachedType::ClientSide;
-			}
-			else
-			{
-				TmpFlags = EAttachedType::BothSide;
-			}
-		}
-		else if (EAttachedType::HasAnyFlags(InFlags, EAttachedType::ServerSide))
-		{
-			const bool bSetReplicated = EAttachedType::HasAnyFlags(InFlags, EAttachedType::Replicated);
-			const bool bSetNameStable = EAttachedType::HasAnyFlags(InFlags, EAttachedType::NameStable);
-			if (bIsReplicated && !bSetReplicated)
-				TmpFlags |= EAttachedType::Replicated;
-
-			if (bIsReplicated || bSetReplicated)
-			{
-				if (bIsNameStable || bSetNameStable)
-					TmpFlags |= EAttachedType::ClientSide | EAttachedType::NameStable;
-				else
-					TmpFlags &= ~EAttachedType::ClientSide | EAttachedType::NameStable;
-			}
-		}
-		return TmpFlags;
-	}
-
 	void AddDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 	{
 		if (!RegDatas.Num())
@@ -83,7 +37,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 			{
 				if (RegClass)
 				{
-					Arr.AddUnique(FRegClassData{RegClass, GetMode(Mode, RegClass)});
+					Arr.AddUnique(FRegClassData{RegClass, UDeferredComponentRegistry::GetMode(Mode, RegClass)});
 				}
 			}
 		});
@@ -95,7 +49,7 @@ struct ClassDataStorage : public ClassStorage::TClassStorageImpl<FRegClassDataAr
 		{
 			ModifyData(Class, bPersistent, [&](auto&& Arr) {
 				auto TmpFlags = Mode;
-				Arr.AddUnique(FRegClassData{RegClass, GetMode(Mode, RegClass)});
+				Arr.AddUnique(FRegClassData{RegClass, UDeferredComponentRegistry::GetMode(Mode, RegClass)});
 			});
 		}
 	}
@@ -106,9 +60,14 @@ ClassDataStorage Storage;
 void AppendDeferredComponents(AActor& Actor)
 {
 #if WITH_EDITOR
-	if (!Actor.GetWorld()->IsGameWorld())
+	auto World = Actor.GetWorld();
+	if (!(World->WorldType == EWorldType::PIE || World->WorldType == EWorldType::Game))
 		return;
 #endif
+	auto CurClass = Actor.GetClass();
+	auto It = Storage.CreateIterator(CurClass);
+	if (!It)
+		return;
 
 	static auto PrefixName = TEXT("`");
 #if WITH_EDITOR
@@ -121,7 +80,7 @@ void AppendDeferredComponents(AActor& Actor)
 	}
 	if (Names.Num())
 	{
-		FString Desc = FString::Printf(TEXT("component name conflicted, prefix:%s. Class:%s Name:%s"), PrefixName, *Actor.GetClass()->GetName());
+		FString Desc = FString::Printf(TEXT("component name conflicted:%s."), *Actor.GetClass()->GetName());
 
 		for (auto& a : Names)
 		{
@@ -138,46 +97,47 @@ void AppendDeferredComponents(AActor& Actor)
 	}
 #endif
 
-	auto CurClass = Actor.GetClass();
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_AppendDeferredComponents);
-	for (auto It = Storage.CreateIterator(CurClass); It; ++It)
+	do
 	{
-		auto CurPtr = *It;
-		for (auto& RegData : CurPtr->Data)
+		auto& CurData = *It;
+		for (auto& RegData : CurData.Data)
 		{
 			if (!ensure(IsValid(RegData.RegClass)))
 				continue;
 
-			const bool bIsClient = (Actor.GetNetMode() == NM_Client);
+			const bool bIsClient = (Actor.GetNetMode() != NM_DedicatedServer);
 			//
-			if ((RegData.RegFlags & (bIsClient ? EAttachedType::ClientSide : EAttachedType::ServerSide)) == 0)
+			if ((RegData.RegFlags & (bIsClient ? EComponentDeferredMode::ClientSide : EComponentDeferredMode::ServerSide)) == 0)
 				continue;
 
 			auto CDO = RegData.RegClass.GetDefaultObject();
 			const bool bIsReplicated = CDO->GetIsReplicated();
-			const bool bSetReplicated = EAttachedType::HasAnyFlags(RegData.RegFlags, EAttachedType::Replicated);
+			const bool bSetReplicated = EComponentDeferredMode::HasAnyFlags(RegData.RegFlags, EComponentDeferredMode::Replicated);
 
 			const bool bIsNameStable = CDO->IsNameStableForNetworking();
-			const bool bSetNameStable = EAttachedType::HasAnyFlags(RegData.RegFlags, EAttachedType::NameStable);
+			const bool bSetNameStable = EComponentDeferredMode::HasAnyFlags(RegData.RegFlags, EComponentDeferredMode::NameStable);
 
 			if (bIsClient)
 			{
-				if (EAttachedType::HasAnyFlags(RegData.RegFlags, EAttachedType::ServerSide) && (bIsReplicated || bSetReplicated) && !bSetNameStable && !bIsNameStable)
+				if (EComponentDeferredMode::HasAnyFlags(RegData.RegFlags, EComponentDeferredMode::ServerSide) && (bIsReplicated || bSetReplicated) && !bSetNameStable && !bIsNameStable)
 				{
 					continue;
 				}
 			}
 
-#if WITH_EDITOR
-			// FIXME : need to check if exist one?
-			if (ensure(!Actor.FindComponentByClass(CurClass)))
-#endif
+			// check existing deferred component
+			if (!ensure(!Actor.FindComponentByClass(CurClass)))
 			{
-				UE_LOG(LogTemp, Log, TEXT("DeferredComponentRegistry::AppendDeferredComponents %s : %s"), *Actor.GetName(), *RegData.RegClass->GetName());
+				UE_LOG(LogGenericStorages, Warning, TEXT("DeferredComponentRegistry::AppendDeferComponents Skip ActorComponent %s For Actor %s"), *GetNameSafe(RegData.RegClass), *GetNameSafe(&Actor));
+			}
+			else
+			{
+				UE_LOG(LogGenericStorages, Log, TEXT("DeferredComponentRegistry::AppendDeferredComponents %s : %s"), *Actor.GetName(), *RegData.RegClass->GetName());
 				QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_SpawnComponents);
 				FName CompName = *FString::Printf(TEXT("%s_%s"), PrefixName, *RegData.RegClass->GetName());
 				// no need AddOwnedComponent as NewObject does
-				UActorComponent* ActorComp = NewObject<UActorComponent>(&Actor, RegData.RegClass, *CompName.ToString());
+				UActorComponent* ActorComp = NewObject<UActorComponent>(&Actor, RegData.RegClass, *CompName.ToString(), RF_Transient);
 				if (bSetNameStable)
 					ActorComp->SetNetAddressable();
 				if (bSetReplicated)
@@ -186,6 +146,8 @@ void AppendDeferredComponents(AActor& Actor)
 
 				if (TOnComponentInitialized<AActor>::bNeedInit)
 				{
+					Actor.AddInstanceComponent(ActorComp);
+
 					if (ActorComp->bAutoActivate && !ActorComp->IsActive())
 					{
 						ActorComp->Activate(true);
@@ -196,50 +158,39 @@ void AppendDeferredComponents(AActor& Actor)
 					}
 				}
 			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("DeferredComponentRegistry::AppendDeferComponents Skip CompClass %s For Actor %s"), *GetNameSafe(RegData.RegClass), *GetNameSafe(&Actor));
-			}
 		}
-	}
+	} while (++It);
 }
 
-void BeginListen()
-{
-	if (TrueOnFirstCall([] {}))
-	{
+static FDelayedAutoRegisterHelper DelayInnerInitUDeferredComponentRegistry(EDelayedRegisterRunPhase::EndOfEngineInit, [] {
 #if WITH_EDITOR
-		if (GIsEditor)
-		{
-			FEditorDelegates::PreBeginPIE.AddLambda([](bool bIsSimulating) { Storage.Cleanup(); });
-		}
-		else
-#endif
-		{
-			// cleanup
-			// Register for PreloadMap so cleanup can occur on map transitions
-			FCoreUObjectDelegates::PreLoadMap.AddLambda([](const FString& MapName) { Storage.Cleanup(); });
-			// FWorldDelegates::OnPreWorldFinishDestroy.AddLambda([](UWorld*) { Storage.Cleanup(); });
-		}
-
-		// Bind
-		TOnComponentInitialized<AActor>::Bind();
-	}
-}
-}  // namespace DeferredComponentRegistry
-
-UDeferredComponentRegistry::UDeferredComponentRegistry()
-{
-	if (HasAnyFlags(RF_ClassDefaultObject))
+	if (GIsEditor)
 	{
-		DeferredComponentRegistry::BeginListen();
+		FEditorDelegates::PreBeginPIE.AddLambda([](bool bIsSimulating) { Storage.Cleanup(); });
 	}
-}
+	else
+#endif
+	{
+		// cleanup
+		// Register for PreloadMap so cleanup can occur on map transitions
+		FCoreUObjectDelegates::PreLoadMap.AddLambda([](const FString& MapName) { Storage.Cleanup(); });
+		// FWorldDelegates::OnPreWorldFinishDestroy.AddLambda([](UWorld*) { Storage.Cleanup(); });
+	}
+
+	// Bind
+	TOnComponentInitialized<AActor>::Bind();
+});
+}  // namespace DeferredComponentRegistry
 
 void UDeferredComponentRegistry::AddDeferredComponents(TSubclassOf<AActor> Class, const TSet<TSubclassOf<UActorComponent>>& RegDatas, bool bPersistent, uint8 Mode)
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_DeferredComponentRegistry_Registers);
 	DeferredComponentRegistry::Storage.AddDeferredComponents(Class, RegDatas, bPersistent, Mode);
+}
+
+void UDeferredComponentRegistry::ModifyDeferredComponents(TSubclassOf<AActor> Class, TFunctionRef<void(DeferredComponentRegistry::FRegClassDataArray&)> Cb, bool bPersistent)
+{
+	DeferredComponentRegistry::Storage.ModifyData(Class, bPersistent, Cb);
 }
 
 void UDeferredComponentRegistry::AddDeferredComponent(TSubclassOf<AActor> Class, TSubclassOf<UActorComponent> RegClass, bool bPersistent, uint8 Mode)
@@ -251,4 +202,43 @@ void UDeferredComponentRegistry::AddDeferredComponent(TSubclassOf<AActor> Class,
 void UDeferredComponentRegistry::EnableAdd(bool bNewEnabled)
 {
 	DeferredComponentRegistry::Storage.SetEnableState(bNewEnabled);
+}
+
+uint8 UDeferredComponentRegistry::GetMode(uint8 InFlags, TSubclassOf<UActorComponent> InClass)
+{
+	auto TmpFlags = InFlags;
+	auto CDO = InClass.GetDefaultObject();
+	if (!TmpFlags)
+	{
+		if (CDO->GetIsReplicated())
+		{
+			const bool bIsNameStable = CDO->IsNameStableForNetworking();
+			TmpFlags = EComponentDeferredMode::ServerSide | EComponentDeferredMode::Replicated;
+			if (bIsNameStable)
+				TmpFlags |= EComponentDeferredMode::NameStable | EComponentDeferredMode::ClientSide;
+		}
+		else
+		{
+			TmpFlags = EComponentDeferredMode::BothSide;
+		}
+	}
+	else if (EComponentDeferredMode::HasAnyFlags(InFlags, EComponentDeferredMode::ServerSide))
+	{
+		bool bSetReplicated = EComponentDeferredMode::HasAnyFlags(InFlags, EComponentDeferredMode::Replicated);
+		const bool bSetNameStable = EComponentDeferredMode::HasAnyFlags(InFlags, EComponentDeferredMode::NameStable);
+		if (!bSetReplicated && CDO->GetIsReplicated())
+		{
+			TmpFlags |= EComponentDeferredMode::Replicated;
+			bSetReplicated = true;
+		}
+
+		if (bSetReplicated)
+		{
+			if (bSetNameStable || CDO->IsNameStableForNetworking())
+				TmpFlags |= EComponentDeferredMode::ClientSide | EComponentDeferredMode::NameStable;
+			else
+				TmpFlags &= ~EComponentDeferredMode::ClientSide | EComponentDeferredMode::NameStable;
+		}
+	}
+	return TmpFlags;
 }

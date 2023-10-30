@@ -1,10 +1,9 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
 
-#include "AI/NavigationSystemBase.h"
 #include "Engine/World.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Templates/SubclassOf.h"
@@ -26,25 +25,15 @@ enum Type
 	Replicated = 0x4 UMETA(DisplayName = "SetReplicate", ToolTip = "SetReplicate"),
 	NameStable = 0x8 UMETA(DisplayName = "NameStable", ToolTip = "Component,NameStable"),
 
-	BothSide = 0x3 UMETA(Hidden),
+	// means that it will create on bothside, and has a statble name path for repliction
+	Instanced = 0xF UMETA(Hidden),
+
+	BothSide = ServerSide | ClientSide UMETA(Hidden),
 };
 }  // namespace EComponentDeferredMode
 
-namespace EAttachedType
+namespace EComponentDeferredMode
 {
-enum Flag
-{
-	ServerSide = 0x1,
-	ClientSide = 0x2,
-	Replicated = 0x4,
-	NameStable = 0x8,
-
-	// means that it will create on bothside, and has a statble name path for repliction
-	Instanced = 0xF,
-
-	BothSide = 0x3,
-};
-
 FORCEINLINE bool HasAnyFlags(uint8 Test, uint8 Flags)
 {
 	return (Test & Flags) != 0;
@@ -53,14 +42,26 @@ FORCEINLINE bool HasAllFlags(uint8 Test, uint8 Flags)
 {
 	return (Test & Flags) == Flags;
 }
-}  // namespace EAttachedType
+}  // namespace EComponentDeferredMode
+
+namespace DeferredComponentRegistry
+{
+struct FRegClassData
+{
+	TSubclassOf<UActorComponent> RegClass;
+	uint8 RegFlags;
+
+	// AddUnique
+	inline bool operator==(const FRegClassData& Ohter) const { return Ohter.RegClass == RegClass; }
+};
+using FRegClassDataArray = TArray<FRegClassData>;
+}  // namespace DeferredComponentRegistry
 
 UCLASS()
 class GENERICSTORAGES_API UDeferredComponentRegistry final : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:
-	UDeferredComponentRegistry();
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (CallableWithoutWorldContext = true))
 	static void AddDeferredComponents(TSubclassOf<AActor> Class,
 									  const TSet<TSubclassOf<UActorComponent>>& RegDatas,
@@ -75,4 +76,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (CallableWithoutWorldContext = true))
 	static void EnableAdd(bool bNewEnabled);
+
+	static uint8 GetMode(uint8 InFlags, TSubclassOf<UActorComponent> InClass);
+	static void ModifyDeferredComponents(TSubclassOf<AActor> Class, TFunctionRef<void(DeferredComponentRegistry::FRegClassDataArray&)> Cb, bool bPersistent = false);
 };

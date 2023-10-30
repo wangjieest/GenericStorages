@@ -1,13 +1,13 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #include "CoreMinimal.h"
 
-#include <memory>
+#include "GenericStoragesLog.h"
 
 namespace ClassStorage
 {
-// each type (USTRUCT or UCLASS) would has a storage place in the type-tree for lookup fast
+// each type (USTRUCT or UCLASS) would has a storage place in the type-tree for fast lookup
 template<typename T, bool bAutoLock = true>
 struct TClassStorageImpl
 {
@@ -15,13 +15,12 @@ protected:
 	using StorageDataType = T;
 	struct StorageContainerType;
 
-	// there is issue with TSharedPtr, farword declare in class template caused incomplete type usage
-	using DataPtrType = std::shared_ptr<StorageContainerType>;
-	static auto* GetRaw(const DataPtrType& Ptr) { return Ptr.get(); }
+	using DataPtrType = TSharedPtr<StorageContainerType>;
+	static auto* GetRaw(const DataPtrType& Ptr) { return Ptr.Get(); }
 	template<typename... Args>
 	static DataPtrType AllocShared(Args&&... args)
 	{
-		return std::make_shared<StorageContainerType>(std::forward<Args>(args)...);
+		return MakeShared<StorageContainerType>(Forward<Args>(args)...);
 	}
 	struct ClassIterator
 	{
@@ -30,7 +29,7 @@ protected:
 		{
 		}
 		// we do not return sharedptr type.
-		FORCEINLINE const StorageContainerType* operator*() const { return GetRaw(Ptr); }
+		FORCEINLINE const StorageContainerType& operator*() const { return *GetRaw(Ptr); }
 		FORCEINLINE const StorageContainerType* operator->() const { return GetRaw(Ptr); }
 		FORCEINLINE explicit operator bool() { return Ptr != nullptr; }
 		FORCEINLINE ClassIterator& operator++()
@@ -58,11 +57,8 @@ protected:
 	mutable bool bEnableAdd = true;
 
 	//////////////////////////////////////////////////////////////////////////
-	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class, bool bEnsure = true)
+	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class, bool bEnsure, bool* bNewCreated = nullptr)
 	{
-#if !UE_BUILD_SHIPPING
-		UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::Add %s"), *Class->GetName());
-#endif
 		if (bEnsure && !ensureAlwaysMsgf(bEnableAdd, TEXT("TClassDataStorage cannot add data anymore")))
 			return nullptr;
 
@@ -70,6 +66,8 @@ protected:
 		if (!Ptr)
 		{
 			Ptr = AllocShared();
+			if (bNewCreated)
+				*bNewCreated = true;
 			Ptr->KeyClass = Class;
 			for (auto& a : Regs)
 			{
@@ -81,7 +79,7 @@ protected:
 						if (!SuperPtr)
 						{
 #if !UE_BUILD_SHIPPING
-							UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::AddParent %s -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName());
+							UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::AddParent %s -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName());
 #endif
 							CurPtr->Super = Ptr;
 							break;
@@ -89,14 +87,14 @@ protected:
 						else if (Class == SuperPtr->KeyClass)
 						{
 #if !UE_BUILD_SHIPPING
-							UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::AlreadyAdded %s -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName());
+							UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::AlreadyAdded %s -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName());
 #endif
 							break;
 						}
 						else if (SuperPtr->KeyClass.IsValid() && Class->IsChildOf(SuperPtr->KeyClass.Get()))
 						{
 #if !UE_BUILD_SHIPPING
-							UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::Inserted %s->  -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName(), *SuperPtr->KeyClass->GetName());
+							UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Inserted %s->  -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName(), *SuperPtr->KeyClass->GetName());
 #endif
 							Ptr->Super = CurPtr->Super;
 							CurPtr->Super = Ptr;
@@ -112,7 +110,7 @@ protected:
 					if (auto InnerPtr = Regs.Find(ParentClass))
 					{
 #if !UE_BUILD_SHIPPING
-						UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::AddedChild %s -> %s"), *Class->GetName(), *ParentClass->GetName());
+						UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::AddedChild %s -> %s"), *Class->GetName(), *ParentClass->GetName());
 #endif
 						Ptr->Super = *InnerPtr;
 						break;
@@ -136,14 +134,14 @@ protected:
 
 		DataPtrType& Ptr = FastLookupTable.Add(Class);
 #if !UE_BUILD_SHIPPING
-		UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::FastLookupTable Add %s"), *Class->GetName());
+		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::FastLookupTable Add %s"), *Class->GetName());
 #endif
-		for (auto ParentClass = Class->GetSuperStruct(); ParentClass != nullptr; ParentClass = ParentClass->GetSuperStruct())
+		for (auto CurrentClass = Class; CurrentClass != nullptr; CurrentClass = CurrentClass->GetSuperStruct())
 		{
-			if (auto InnerPtr = RegisteredData.Find(ParentClass))
+			if (auto InnerPtr = RegisteredData.Find(CurrentClass))
 			{
 #if !UE_BUILD_SHIPPING
-				UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::FastLookupTable %s -> %s"), *Class->GetName(), *ParentClass->GetName());
+				UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::FastLookupTable %s -> %s"), *Class->GetName(), *CurrentClass->GetName());
 #endif
 				Ptr = *InnerPtr;
 				break;
@@ -151,9 +149,21 @@ protected:
 		}
 		return Ptr;
 	}
+
+	void Clean()
+	{
+		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Clean"));
+#if 1
+		FastLookupTable.Reset();
+		RegisteredData.Reset();
+		PersistentData.Reset();
+		SetEnableState(true);
+#endif
+	}
+
 	void Clear()
 	{
-		UE_LOG(LogTemp, Log, TEXT("TClassDataStorage::Clear"));
+		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Clear"));
 		FastLookupTable.Reset();
 		RegisteredData.Reset();
 		SetEnableState(true);
@@ -178,13 +188,19 @@ protected:
 	}
 
 public:
+	TClassStorageImpl()
+	{
+		static_assert(std::is_copy_assignable<StorageDataType>::value, "err");
+		FCoreDelegates::OnEnginePreExit.AddRaw(this, &TClassStorageImpl::Clean);
+	}
+
 	void Cleanup() { Clear(); }
 
 	void SetEnableState(bool bNewEanbled) const { bEnableAdd = bNewEanbled; }
 
 	StorageDataType* FindData(const UStruct* Class) const
 	{
-		auto Ptr = Find(Class);
+		DataPtrType Ptr = Class ? Find(Class) : nullptr;
 		return Ptr ? &Ptr->Data : (StorageDataType*)nullptr;
 	}
 	auto CreateIterator(const UStruct* Class) const { return ClassIterator(Find(Class)); }
@@ -195,11 +211,14 @@ public:
 		RegisteredData.GetKeys(Keys);
 		return Keys;
 	}
-	template<typename F /*void(T&)*/>
+	template<typename F /*void(auto&)*/>
 	void ModifyData(const UStruct* Class, bool bPersistent, const F& Fun, bool bPrompt = true)
 	{
 		if (ensureAlways(Class))
 		{
+#if !UE_BUILD_SHIPPING
+			UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Modify %s %s"), bPersistent ? TEXT("All") : TEXT("Cur"), *Class->GetName());
+#endif
 			if (bPersistent)
 			{
 				if (auto DataPtr = Add(PersistentData, Class, bPrompt))
@@ -220,6 +239,9 @@ public:
 	{
 		if (ensureAlways(Class))
 		{
+#if !UE_BUILD_SHIPPING
+			UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Modify Current %s"), *Class->GetName());
+#endif
 			if (auto ClassPtr = Find(Class))
 			{
 				Fun(ClassPtr->Data, true);
@@ -229,7 +251,7 @@ public:
 			{
 				if (bEnable)
 					SetEnableState(true);
-				if (auto DataPtr = Add(RegisteredData, Class))
+				if (auto DataPtr = Add(RegisteredData, Class, true))
 				{
 					Fun((*DataPtr)->Data, false);
 					FastLookupTable.FindOrAdd(Class) = *DataPtr;

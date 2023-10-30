@@ -1,10 +1,13 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #include "CoreMinimal.h"
 
+#include "Engine/EngineTypes.h"
+#include "Engine/World.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "Launch/Resources/Version.h"
+#include "Misc/CoreDelegates.h"
+#include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
 #include "UnrealCompatibility.h"
 
@@ -12,14 +15,84 @@
 
 class UWorld;
 class UGenericSingletons;
+class FTimerManager;
+
+namespace GenericStorages
+{
+GENERICSTORAGES_API bool CallOnPluginReady(FSimpleDelegate Delegate);
+
+GENERICSTORAGES_API void CallOnEngineInitCompletedImpl(FSimpleDelegate& Lambda);
+
+GENERICSTORAGES_API bool DelayExec(const UObject* InObj, FSimpleDelegate InDelegate, float InDelay = 0.f, bool bEnsureExec = true);
+
+#if WITH_EDITOR
+GENERICSTORAGES_API void CallOnEditorMapOpendImpl(TDelegate<void(UWorld*)> Delegate);
+#endif
+
+GENERICSTORAGES_API FTimerManager* GetTimerManager(UWorld* InWorld);
+GENERICSTORAGES_API FTimerHandle SetTimer(UWorld* InWorld, FSimpleDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay = -1.f);
+GENERICSTORAGES_API UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class);
+}  // namespace GenericStorages
+
+template<typename F>
+void CallOnEditorMapOpend(F&& Lambda, UObject* InObj = nullptr)
+{
+#if WITH_EDITOR
+	TDelegate<void(UWorld*)> Delegate;
+	if (InObj)
+		Delegate.BindWeakLambda(InObj, Forward<F>(Lambda));
+	else
+		Delegate.BindLambda(Forward<F>(Lambda));
+	GenericStorages::CallOnEditorMapOpendImpl(MoveTemp(Delegate));
+#endif
+}
+
+template<typename F>
+void CallOnEngineInitCompleted(F&& Lambda, UObject* InObj = nullptr)
+{
+	FSimpleDelegate Delegate;
+	if (InObj)
+		Delegate.BindWeakLambda(InObj, Forward<F>(Lambda));
+	else
+		Delegate.BindLambda(Forward<F>(Lambda));
+	GenericStorages::CallOnEngineInitCompletedImpl(Delegate);
+}
+
+template<typename F>
+auto DelayExec(const UObject* InObj, F&& Lambda, float InDelay = 0.f, bool bEnsureExec = true)
+{
+	if (InObj)
+		return GenericStorages::DelayExec(InObj, FSimpleDelegate::CreateWeakLambda(const_cast<UObject*>(InObj), Forward<F>(Lambda)), InDelay, bEnsureExec);
+	else
+		return GenericStorages::DelayExec(InObj, FSimpleDelegate::CreateLambda(Forward<F>(Lambda)), InDelay, bEnsureExec);
+}
+
+template<typename F>
+auto CallOnWorldNextTick(const UObject* InObj, F&& Lambda, bool bEnsureExec = true)
+{
+	return DelayExec(InObj, Forward<F>(Lambda), 0.f, bEnsureExec);
+}
 
 namespace GenericSingletons
 {
 GENERICSTORAGES_API UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass = nullptr);
-GENERICSTORAGES_API void SetWorldCleanup(FSimpleDelegate Cb, bool bEditorOnly = false);
-}  // namespace GenericSingletons
+GENERICSTORAGES_API void DeferredWorldCleanup(FSimpleDelegate Cb, FString Desc, bool bEditorOnly = false);
+template<typename F>
+void DeferredWorldCleanup(const TCHAR* Desc, F&& f, bool bEditorOnly = false)
+{
+	DeferredWorldCleanup(FSimpleDelegate::CreateLambda(Forward<F>(f)), Desc, bEditorOnly);
+}
+template<typename F>
+void DeferredWorldCleanup(const TCHAR* Desc, UObject* InObj, F&& f, bool bEditorOnly = false)
+{
+	DeferredWorldCleanup(FSimpleDelegate::CreateWeakLambda(InObj, Forward<F>(f)), Desc, bEditorOnly);
+}
 
 template<typename T>
+bool bGenericSingltonInCtor = false;
+}  // namespace GenericSingletons
+
+template<typename T = UStruct>
 FORCEINLINE T* DynamicReflection(const FString& TypeName)
 {
 	return static_cast<T*>(GenericSingletons::DynamicReflectionImpl(TypeName, T::StaticClass()));
@@ -40,10 +113,57 @@ FORCEINLINE UEnum* DynamicEnum(const FString& EnumName)
 
 template<typename T, typename = void>
 struct TGenericConstructionAOP;
+template<typename T, typename = void>
+struct TGenericSingletonAOP;
 // static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr);
 
-DECLARE_DELEGATE_OneParam(FAsyncObjectCallback, class UObject*);
-DECLARE_DELEGATE_OneParam(FAsyncBatchCallback, const TArray<UObject*>&);
+DECLARE_DELEGATE_OneParam(FAsyncObjectCallback, UObject*);
+DECLARE_DELEGATE_OneParam(FAsyncBatchCallback, TArray<UObject*>&);
+
+#define USE_GENEIRC_SINGLETON_GUARD WITH_EDITOR
+
+template<typename T>
+class TGenericSingleBase
+{
+public:
+	template<typename U = UObject>
+	static T* GetSingleton(const U* WorldContextObject = nullptr, bool bCreate = true);
+
+	TGenericSingleBase();
+};
+
+struct FObjConstructParameter
+{
+	mutable FName Name = NAME_None;
+	mutable UClass* Class = nullptr;
+	const FTransform* Trans = nullptr;
+
+	FObjConstructParameter() = default;
+
+	FObjConstructParameter(UClass* InClass, FName InName = NAME_None, const FTransform* InTrans = nullptr)
+		: Name(InName)
+		, Class(InClass)
+		, Trans(InTrans)
+	{
+	}
+	template<typename U>
+	FObjConstructParameter(TSubclassOf<U> InClass, FName InName = NAME_None, const FTransform* InTrans = nullptr)
+		: FObjConstructParameter(InClass.Get(), NAME_None, InTrans)
+	{
+	}
+	FObjConstructParameter(UClass* InClass, const FTransform* InTrans)
+		: FObjConstructParameter(InClass, NAME_None, InTrans)
+	{
+	}
+	FObjConstructParameter(FName InName, UClass* InClass = nullptr, const FTransform* InTrans = nullptr)
+		: FObjConstructParameter(InClass, InName, InTrans)
+	{
+	}
+	FObjConstructParameter(FName InName, const FTransform* InTrans)
+		: FObjConstructParameter(nullptr, InName, InTrans)
+	{
+	}
+};
 
 // a simple and powerful singleton utility
 UCLASS(Transient, meta = (DisplayName = "GenericSingletons"))
@@ -54,107 +174,247 @@ public:
 	UGenericSingletons();
 
 protected:
+	static UObject* GetSingletonInternal(UClass* Class, const UObject* WorldContextObject, bool bCreate, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
+	static UObject* RegisterAsSingletonInternal(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist = true, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
+
 	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "RegisterAsSingleton", WorldContext = "WorldContextObject"))
 	static bool K2_RegisterAsSingleton(UObject* Object, const UObject* WorldContextObject = nullptr, bool bReplaceExist = true)
 	{
-		UObject* Ret = Object ? RegisterAsSingletonImpl(Object, WorldContextObject, bReplaceExist) : nullptr;
+		UObject* Ret = Object ? RegisterAsSingletonInternal(Object, WorldContextObject, bReplaceExist) : nullptr;
 		return (Ret && Ret == Object);
+	}
+	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "UnregisterSingleton", WorldContext = "WorldContextObject"))
+	static bool K2_UnregisterSingleton(UObject* Object, const UObject* WorldContextObject = nullptr) { return Object ? UnregisterSingletonImpl(Object, WorldContextObject) : false; }
+
+	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "GetSingleton", WorldContext = "WorldContextObject", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* K2_GetSingleton(UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true);
+	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "GetSingletonEx", WorldContext = "WorldContextObject", AdvancedDisplay = "RegClass,bValid", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* K2_GetSingletonEx(bool& bIsValid, UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
+	{
+		UObject* Ret = nullptr;
+		do
+		{
+#if WITH_EDITOR
+			if (!ensure(Class && (!RegClass || Class->IsChildOf(RegClass))))
+				break;
+#endif
+			Ret = GetSingletonInternal(Class, WorldContextObject, bCreate, nullptr, RegClass);
+		} while (false);
+		bIsValid = IsValid(Ret);
+		return Ret;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Game", meta = (DisplayName = "PureGetSingleton", WorldContext = "WorldContextObject", AdvancedDisplay = "RegClass", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* GetSingletonImplPure(UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
+	{
+		bool bIsValid = false;
+		return K2_GetSingletonEx(bIsValid, Class, WorldContextObject, bCreate, RegClass);
 	}
 
 public:  // C++
-	UFUNCTION(BlueprintCallable, Category = "Game", meta = (DisplayName = "GetSingleton", WorldContext = "WorldContextObject", HidePin = "RegClass", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* GetSingletonImpl(UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true, UClass* RegClass = nullptr);
+	FORCEINLINE static UObject* FindSingleton(UClass* Class, const UObject* WorldContextObject) { return GetSingletonInternal(Class, WorldContextObject, false); }
+	static UObject* GetSingletonImpl(UClass* Class, const UObject* WorldContextObject, UClass* RegClass = nullptr) { return GetSingletonInternal(Class, WorldContextObject, true, RegClass); }
 
-	static UObject* RegisterAsSingletonImpl(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist = true, UClass* InNativeClass = nullptr);
-
-	template<typename T>
-	FORCEINLINE static UObject* RegisterAsSingleton(T* Object, const UObject* WorldContextObject, bool bReplaceExist = true)
+	// InBaseClass == nullptr will use the first native ancestor type
+	static UObject* RegisterAsSingletonImpl(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist = true, UClass* InBaseClass = nullptr)
 	{
-		return RegisterAsSingletonImpl(Object, WorldContextObject, bReplaceExist, T::StaticClass());
+		return RegisterAsSingletonInternal(Object, WorldContextObject, bReplaceExist, InBaseClass);
+	}
+	static bool UnregisterSingletonImpl(UObject* Object, const UObject* WorldContextObject, UClass* InBaseClass = nullptr);
+
+#if USE_GENEIRC_SINGLETON_GUARD
+	FORCEINLINE static UObject* FindSingleton(UClass* Class, const UWorld* InWorld) { return GetSingletonInternal(Class, CastChecked<UObject>(InWorld), false); }
+	static UObject* GetSingletonImpl(UClass* Class, const UWorld* InWorld, UClass* RegClass = nullptr) { return GetSingletonInternal(Class, CastChecked<UObject>(InWorld), true, RegClass); }
+	static UObject* RegisterAsSingletonImpl(UObject* Object, const UWorld* InWorld, bool bReplaceExist = true, UClass* InBaseClass = nullptr)
+	{
+		return RegisterAsSingletonImpl(Object, CastChecked<UObject>(InWorld), bReplaceExist, InBaseClass);
+	}
+	static bool UnregisterSingletonImpl(UObject* Object, const UWorld* InWorld, UClass* InBaseClass = nullptr) { return UnregisterSingletonImpl(Object, CastChecked<UObject>(InWorld), InBaseClass); }
+#endif
+
+public:
+	template<typename T, typename U = UObject>
+	FORCEINLINE static UObject* RegisterAsSingleton(T* Object, const U* WorldContextObject, bool bReplaceExist = true)
+	{
+		return RegisterAsSingletonImpl(Object, ConvertNullType(WorldContextObject), bReplaceExist, T::StaticClass());
+	}
+	template<typename T, typename U = UObject>
+	FORCEINLINE static bool UnregisterSingleton(T* Object, const U* WorldContextObject)
+	{
+		return UnregisterSingletonImpl(Object, ConvertNullType(WorldContextObject), T::StaticClass());
 	}
 
-	template<typename T>
-	static T* GetSingleton(const UObject* WorldContextObject, bool bCreate = true)
+	template<typename T, typename U = UObject>
+	static T* GetSingleton(const U* WorldContextObject, bool bCreate = true, TSubclassOf<T> InSubClass = nullptr)
 	{
-		auto Ptr = Cast<T>(GetSingletonImpl(T::StaticClass(), WorldContextObject, false));
-		if (IsValid(Ptr))
-			return Ptr;
-
-		return bCreate ? TryGetSingleton<T>(WorldContextObject, [&] { return TGenericConstructionAOP<T>::CustomConstruct(WorldContextObject, nullptr); }) : nullptr;
+		auto InCtx = ConvertNullType(WorldContextObject);
+		auto NativeClass = T::StaticClass();
+		check(!InSubClass.Get() || InSubClass->IsChildOf(NativeClass));
+		UClass* SubClass = *InSubClass ? *InSubClass : NativeClass;
+		T* Ptr = Cast<T>(FindSingleton(SubClass, InCtx));
+		if (bCreate && !IsValid(Ptr))
+		{
+			Ptr = TryGetSingleton<T>(
+				InCtx,
+				[&] { return TGenericSingletonAOP<T>::CustomConstruct(InCtx, InSubClass); },
+				InSubClass);
+		}
+		return Ptr;
 	}
 
-	template<typename T, typename F>
-	static T* TryGetSingleton(const UObject* WorldContextObject, const F& ConstructFunc)
+	template<typename T, typename F, typename U = UObject>
+	static T* TryGetSingleton(const U* WorldContextObject, const F& ConstructFunc, TSubclassOf<T> InSubClass = nullptr)
 	{
 		static_assert(TIsDerivedFrom<typename TRemovePointer<decltype(ConstructFunc())>::Type, T>::IsDerived, "err");
-		auto Mgr = GetWorldLocalManager(WorldContextObject ? WorldContextObject->GetWorld() : nullptr);
-		auto& Ptr = Mgr->Singletons.FindOrAdd(T::StaticClass());
+		auto NativeClass = T::StaticClass();
+		check(!InSubClass.Get() || InSubClass->IsChildOf(NativeClass));
+		UClass* SubClass = *InSubClass ? *InSubClass : NativeClass;
+
+		auto InCtx = ConvertNullType(WorldContextObject);
+		auto Mgr = GetSingletonsManager(InCtx);
+		auto& Ptr = Mgr->Singletons.FindOrAdd(SubClass);
 		if (!IsValid(Ptr))
 		{
 			Ptr = ConstructFunc();
-			if (ensureAlwaysMsgf(Ptr, TEXT("TryGetSingleton Failed %s"), *T::StaticClass()->GetName()))
-				RegisterAsSingletonImpl(Ptr, WorldContextObject, true, T::StaticClass());
+			if (ensureAlwaysMsgf(Ptr, TEXT("TryGetSingleton Failed for Class : %s"), *SubClass->GetName()))
+				RegisterAsSingletonImpl(Ptr, InCtx, true, SubClass);
 		}
-		return (T*)Ptr;
+		return static_cast<T*>(Ptr);
 	}
 
 public:
 	static TSharedPtr<struct FStreamableHandle> AsyncLoad(const TArray<FSoftObjectPath>& InPaths, FAsyncBatchCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
-
-	static TSharedPtr<struct FStreamableHandle> AsyncLoad(const FString& InPath, FAsyncObjectCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
-
-	static bool AsyncCreate(const UObject* BindedObject, const FString& InPath, FAsyncObjectCallback Cb);
-
-	// AOP(compile time only), any advice for runtime dynamic AOP?
-	template<typename T = UObject>
-	static T* CreateInstance(const UObject* WorldContextObject, UClass* SubClass = nullptr)
+	template<typename LambdaType>
+	static FORCEINLINE auto AsyncLoad(const TArray<FSoftObjectPath>& InPaths, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
 	{
-		check(!SubClass || ensureAlways(SubClass->IsChildOf<T>()));
-		return TGenericConstructionAOP<T>::CustomConstruct(WorldContextObject, SubClass);
+		return AsyncLoad(InPaths, CreateWeakLambda<FAsyncBatchCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
 	}
 
-	// async AOP(compile time only)
-	template<typename T, typename F>
-	static bool AsyncCreate(const UObject* BindedObject, const FString& InPath, F&& f)
+	static TSharedPtr<struct FStreamableHandle> AsyncLoad(const FSoftObjectPath& InPath, FAsyncObjectCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
+	template<typename LambdaType>
+	static FORCEINLINE auto AsyncLoad(const FSoftObjectPath& InPath, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
 	{
-		FWeakObjectPtr WeakObj = BindedObject;
-		auto Lambda = [WeakObj, f{MoveTemp(f)}](UObject* ResolvedObj) {
-			if (!WeakObj.IsStale())
-				f(CreateInstance<T>(WeakObj.Get(), Cast<UClass>(ResolvedObj)));
-		};
+		return AsyncLoad(InPath, CreateWeakLambda<FAsyncObjectCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
+	}
 
-		auto Handle = AsyncLoad(InPath, FAsyncObjectCallback::CreateLambda(Lambda));
-		return Handle.IsValid();
+	// AOP(compile time only), any advice for runtime dynamic AOP?
+	template<typename T = UObject, typename U = UObject>
+	static T* CreateInstance(const U* WorldContextObject, const FObjConstructParameter& Parameter = {})
+	{
+		check(!Parameter.Class || Parameter.Class->IsChildOf<T>());
+		return TGenericConstructionAOP<T>::CustomConstruct(ConvertNullType(WorldContextObject), Parameter);
+	}
+
+	static bool AsyncCreate(const FSoftClassPath& InPath, FAsyncObjectCallback Cb, UObject* WorldContextObj = nullptr);
+	template<typename F, typename T = UObject>
+	static bool AsyncCreate(const FSoftClassPath& InPath, const UObject* ContextObj, F&& f)
+	{
+		return AsyncLoad(InPath, ContextObj, [ContextObj, f{MoveTemp(f)}](UObject* ResolvedObj) { f(CreateInstance<T>(ContextObj, Cast<UClass>(ResolvedObj))); }).IsValid();
 	}
 
 public:
 	template<typename T>
-	static FString GetTypedNameSafe(const T* Obj)
+	static FString GetTypedNameSafe(const T* Obj = nullptr)
 	{
 		return Obj ? Obj->GetName() : T::StaticClass()->GetName();
 	}
 
-	static UObject* CreateInstanceImpl(const UObject* WorldContextObject, UClass* SubClass);
-	template<typename T>
-	static T* CreateInstanceImpl(const UObject* WorldContextObject, UClass* SubClass)
+	static UObject* CreateInstanceImpl(const UObject* WorldContextObject, const FObjConstructParameter& Parameter);
+
+#if USE_GENEIRC_SINGLETON_GUARD
+	static UObject* CreateInstanceImpl(const UWorld* InWorld, const FObjConstructParameter& Parameter) { return CreateInstanceImpl(CastChecked<UObject>(InWorld), Parameter); }
+#endif
+
+	template<typename T, typename U = UObject>
+	static T* CreateInstanceImpl(const U* WorldContextObject, const FObjConstructParameter& Parameter)
 	{
-		check(!SubClass || ensureAlways(SubClass->IsChildOf<T>()));
-		return (T*)UGenericSingletons::CreateInstanceImpl(WorldContextObject, SubClass ? SubClass : T::StaticClass());
+		auto SubClass = Parameter.Class;
+		check(!SubClass || SubClass->IsChildOf<T>());
+		Parameter.Class = SubClass ? SubClass : T::StaticClass();
+		return (T*)UGenericSingletons::CreateInstanceImpl(ConvertNullType(WorldContextObject), Parameter);
+	}
+
+	template<typename T = UObject, typename U = UObject>
+	static T* CreateSingletonImpl(const U* WorldContextObject, UClass* SubClass)
+	{
+#if USE_GENEIRC_SINGLETON_GUARD
+		GenericSingletons::bGenericSingltonInCtor<T> = true;
+		ON_SCOPE_EXIT { GenericSingletons::bGenericSingltonInCtor<T> = false; };
+#endif
+		auto NativeClass = T::StaticClass();
+		check(!SubClass || SubClass->IsChildOf(NativeClass));
+		return (T*)UGenericSingletons::GetSingletonImpl(SubClass ? SubClass : NativeClass, ConvertNullType(WorldContextObject));
 	}
 
 private:
-	static UGenericSingletons* GetWorldLocalManager(UWorld* World);
-
+	static UGenericSingletons* GetSingletonsManager(const UObject* InObj);
+#if USE_GENEIRC_SINGLETON_GUARD
+	static UGenericSingletons* GetSingletonsManager(const UWorld* InWorld) { return GetSingletonsManager(CastChecked<UObject>(InWorld)); }
+#endif
 	UPROPERTY(Transient)
 	TMap<UClass*, UObject*> Singletons;
+
+#if USE_GENEIRC_SINGLETON_GUARD
+	template<typename U, typename R = std::conditional_t<std::is_same<U, std::nullptr_t>::value, UObject, U>>
+#else
+	template<typename U, typename R = U>
+#endif
+	static R* ConvertNullType(U* InCtx)
+	{
+		return InCtx;
+	}
+};
+
+template<typename T, typename V>
+struct TGenericSingletonAOP
+{
+	template<typename U = UObject>
+	static T* CustomConstruct(const U* WorldContextObject, UClass* SubClass = nullptr)
+	{
+		static_assert(TIsSame<V, void>::Value, "error");
+		return UGenericSingletons::CreateSingletonImpl<T>(WorldContextObject, SubClass);
+	}
 };
 
 template<typename T, typename V>
 struct TGenericConstructionAOP
 {
-	static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr)
+	template<typename U = UObject>
+	static T* CustomConstruct(const U* WorldContextObject, const FObjConstructParameter& Parameter = {})
 	{
 		static_assert(TIsSame<V, void>::Value, "error");
-		return UGenericSingletons::CreateInstanceImpl<T>(WorldContextObject, SubClass);
+		return UGenericSingletons::CreateInstanceImpl<T>(WorldContextObject, Parameter);
 	}
 };
+
+template<typename T>
+TGenericSingleBase<T>::TGenericSingleBase()
+{
+	static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+	auto This = static_cast<T*>(this);
+#if USE_GENEIRC_SINGLETON_GUARD
+	extern GENERICSTORAGES_API bool IsInSingletonCreatation(UObject*);
+	checkf(GenericSingletons::bGenericSingltonInCtor<T> || This->HasAnyFlags(RF_ClassDefaultObject) || IsInSingletonCreatation(This), TEXT("SingletonConstructError"));
+#endif
+	// #if USE_GENEIRC_SINGLETON_GUARD
+	// 	if (GenericSingletons::bGenericSingltonInCtor<T>)
+	// #else
+	// 	if (!This->HasAnyFlags(RF_ClassDefaultObject))
+	// #endif
+	// 	{
+	// 		ensure(!UGenericSingletons::RegisterAsSingletonImpl(This, This->GetWorld(), false, StaticClass<T>()));
+	// 	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+template<typename T>
+template<typename U>
+T* TGenericSingleBase<T>::GetSingleton(const U* WorldContextObject, bool bCreate)
+{
+#if USE_GENEIRC_SINGLETON_GUARD
+	GenericSingletons::bGenericSingltonInCtor<T> = true;
+	ON_SCOPE_EXIT { GenericSingletons::bGenericSingltonInCtor<T> = false; };
+#endif
+	return UGenericSingletons::GetSingleton<T>(WorldContextObject, bCreate);
+}

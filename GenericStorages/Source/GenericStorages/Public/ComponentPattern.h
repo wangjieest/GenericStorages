@@ -1,4 +1,4 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -10,7 +10,7 @@
 
 #include "ComponentPattern.generated.h"
 
-UCLASS(Transient)
+UCLASS(Transient, meta = (NeuronAction))
 class GENERICSTORAGES_API UComponentPattern final : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
@@ -18,14 +18,24 @@ public:
 	template<typename T, typename F>
 	static void EachComponent(const UObject* WorldContextObj, const F& f)
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
 		UObjectPattern::EachObject<T>(WorldContextObj, f);
+	}
+
+	DECLARE_DYNAMIC_DELEGATE_OneParam(FOnEachComponentAction, UActorComponent*, Comp);
+	UFUNCTION(BlueprintCallable, BlueprintInternalUseOnly, Category = "Game", meta = (NeuronAction, DisplayName = "EachComponent", WorldContext = "WorldContextObj", HidePin = "WorldContextObj"))
+	static void EachComponent(const UObject* WorldContextObj, TSubclassOf<UActorComponent> Class, UPARAM(meta = (DeterminesOutputType = "Class", DynamicOutputParam = "Comp")) FOnEachComponentAction OnEachComp)
+	{
+		if (ensure(Class))
+		{
+			UObjectPattern::EachObject(WorldContextObj, Class, [&](auto a) { OnEachComp.ExecuteIfBound(static_cast<UActorComponent*>(a)); });
+		}
 	}
 
 	template<typename T>
 	static T* GetComponent(const UObject* WorldContextObject)
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
 		return UObjectPattern::GetObject<T>(WorldContextObject);
 	}
 
@@ -47,7 +57,7 @@ struct TEachComponentPattern : public TEachObjectPattern<T>
 {
 	TEachComponentPattern()
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
 		Ctor(static_cast<T*>(this));
 	}
 	~TEachComponentPattern() { Dtor(static_cast<T*>(this)); }
@@ -62,7 +72,7 @@ struct TSingleComponentPattern : public TSingleObjectPattern<T>
 {
 	TSingleComponentPattern()
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
 		Ctor(static_cast<T*>(this));
 	}
 	~TSingleComponentPattern() { Dtor(static_cast<T*>(this)); }

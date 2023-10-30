@@ -1,30 +1,33 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #include "ComponentPickerCustomization.h"
 #if WITH_EDITOR
-#	include "Slate.h"
+#include "Slate.h"
 
-#	include "AssetData.h"
-#	include "DetailCategoryBuilder.h"
-#	include "DetailLayoutBuilder.h"
-#	include "Editor.h"
-#	include "Engine/BlueprintGeneratedClass.h"
-#	include "Engine/SCS_Node.h"
-#	include "Engine/SimpleConstructionScript.h"
-#	include "GameFramework/Actor.h"
-#	include "IDetailChildrenBuilder.h"
-#	include "IPropertyTypeCustomization.h"
-#	include "IPropertyUtilities.h"
-#	include "Internationalization/Text.h"
-#	include "Misc/AssertionMacros.h"
-#	include "Modules/ModuleManager.h"
-#	include "PropertyCustomizationHelpers.h"
-#	include "PropertyEditorModule.h"
-#	include "PropertyHandle.h"
-#	include "UObject/UnrealType.h"
-#	include "UnrealEditorUtils.h"
-#	include "Widgets/Text/STextBlock.h"
-
+#include "DetailCategoryBuilder.h"
+#include "DetailLayoutBuilder.h"
+#include "Editor.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/SimpleConstructionScript.h"
+#include "GameFramework/Actor.h"
+#include "IDetailChildrenBuilder.h"
+#include "IPropertyTypeCustomization.h"
+#include "IPropertyUtilities.h"
+#include "Internationalization/Text.h"
+#include "Misc/AssertionMacros.h"
+#include "Modules/ModuleManager.h"
+#include "PropertyCustomizationHelpers.h"
+#include "PropertyEditorModule.h"
+#include "PropertyHandle.h"
+#include "UObject/UnrealType.h"
+#include "Editor/UnrealEditorUtils.h"
+#include "Widgets/Text/STextBlock.h"
+#if UE_5_01_OR_LATER
+#include "AssetRegistry/AssetRegistryModule.h"
+#else
+#include "AssetRegistryModule.h"
+#endif
 namespace ComponentPicker
 {
 static const FName NameComponent = TEXT("ComponentName");
@@ -73,7 +76,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		const FString& ClassName = PropertyHandle->GetMetaData("MetaClass");
 		if (!ClassName.IsEmpty())
 		{
-			UClass* Class = FindObject<UClass>(ANY_PACKAGE, *ClassName);
+			UClass* Class = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
 			if (!Class)
 			{
 				Class = LoadObject<UClass>(nullptr, *ClassName);
@@ -113,7 +116,8 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		if (!CDOActorClass && !Actor)
 		{
 			FilterHandle->MarkHiddenByCustomization();
-			if (auto ComponentNameHandle = PropertyHandle->GetChildHandle(ComponentPicker::NameComponent, false))
+			auto ComponentNameHandle = PropertyHandle->GetChildHandle(ComponentPicker::NameComponent, false);
+			if (ComponentNameHandle.IsValid())
 			{
 				HeaderRow
 				.NameContent()
@@ -177,7 +181,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 							CurText = FText::FromName(*InName);
 							if (*InName != *CurName)
 							{
-								GEditor->BeginTransaction(TEXT("PropertyEditor"), NSLOCTEXT("LeveledPicker", "EditPropertyTransaction", "Edit LeveledPicker"), GetPropOwnerUObject(ThisProperty->GetProperty()));
+								GEditor->BeginTransaction(TEXT("PropertyEditor"), NSLOCTEXT("LeveledPicker", "EditPropertyTransaction", "Edit LeveledPicker"), GetPropertyOwnerUObject(ThisProperty->GetProperty()));
 								ThisProperty->NotifyPreChange();
 								*CurName = *InName;
 								ThisProperty->NotifyPostChange(EPropertyChangeType::ValueSet);

@@ -1,15 +1,15 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
 #if WITH_EDITOR
-#	include "CoreUObject.h"
+#include "CoreUObject.h"
 
-#	include "Components/ActorComponent.h"
-#	include "IDetailCustomization.h"
-#	include "IPropertyTypeCustomization.h"
-#	include "Templates/SubclassOf.h"
+#include "Components/ActorComponent.h"
+#include "IDetailCustomization.h"
+#include "IPropertyTypeCustomization.h"
+#include "Templates/SubclassOf.h"
 
 class FComponentPickerCustomization : public IPropertyTypeCustomization
 {

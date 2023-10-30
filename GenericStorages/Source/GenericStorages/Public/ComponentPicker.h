@@ -1,4 +1,4 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,19 +14,29 @@ struct GENERICSTORAGES_API FComponentPicker
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Category = "Config")
+	UPROPERTY(EditAnywhere, Category = "ComponentPicker")
 	FName ComponentName;
 
 #if WITH_EDITORONLY_DATA
-	UPROPERTY(EditDefaultsOnly, Category = "Config")
+	UPROPERTY(EditDefaultsOnly, Category = "ComponentPicker")
 	TSubclassOf<UActorComponent> ComponentClass;
 #endif
 	operator FName() const { return ComponentName; }
 
-	UActorComponent* FindComponentByName(AActor* InActorz) const;
+	UActorComponent* FindComponentByName(AActor* InActor) const;
 	template<typename T>
 	T* FindComponentByName(AActor* InActor) const
 	{
-		return Cast<T>(FindComponentByName(InActor));
+		return FindComponentByName<T>(InActor, ComponentName);
+	}
+
+public:
+	static UActorComponent* FindComponentByName(AActor* InActor, FName CompName, TSubclassOf<UActorComponent> InClass = {});
+
+	template<typename T>
+	static T* FindComponentByName(AActor* InActor, FName CompName)
+	{
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived, "err");
+		return Cast<T>(FindComponentByName(InActor, CompName, T::StaticClass()));
 	}
 };

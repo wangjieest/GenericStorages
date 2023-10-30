@@ -1,12 +1,14 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #include "ObjectDataRegistry.h"
 
 #include "GameFramework/Actor.h"
 #include "GenericSingletons.h"
 #include "Misc/CoreDelegates.h"
+#include "PrivateFieldAccessor.h"
 #include "Templates/SharedPointer.h"
 #include "UnrealCompatibility.h"
+#include "WorldLocalStorages.h"
 
 namespace ObjectDataRegistry
 {
@@ -33,7 +35,7 @@ struct FObjectDataStorage : public FUObjectArray::FUObjectDeleteListener
 
 	void OnObjectRemoved(const UObject* Object)
 	{
-#if ENGINE_MINOR_VERSION >= 23
+#if UE_4_23_OR_LATER
 		// TODO IsInGarbageCollectorThread()
 		static TLockFreePointerListUnordered<FWeakObjectPtr, PLATFORM_CACHE_LINE_SIZE> GameThreadObjects;
 		if (IsInGameThread())
@@ -41,7 +43,7 @@ struct FObjectDataStorage : public FUObjectArray::FUObjectDeleteListener
 		check(IsInGameThread());
 #endif
 		{
-#if ENGINE_MINOR_VERSION >= 23
+#if UE_4_23_OR_LATER
 			if (!GameThreadObjects.IsEmpty())
 			{
 				TArray<FWeakObjectPtr*> Objs;
@@ -58,7 +60,7 @@ struct FObjectDataStorage : public FUObjectArray::FUObjectDeleteListener
 			if (ObjectDataStorage.Num() == 0)
 				DisableListener();
 		}
-#if ENGINE_MINOR_VERSION >= 23
+#if UE_4_23_OR_LATER
 		else
 		{
 			GameThreadObjects.Push(new FWeakObjectPtr(Object));
@@ -175,27 +177,6 @@ void* FObjectDataRegistry::FindDataPtr(const UObject* Obj, FName Key)
 	return nullptr;
 }
 
-void* FObjectDataRegistry::GetDataPtr(const UObject* Obj, FName Key, const TFunctionRef<TSharedPtr<void>()>& Func)
-{
-	void* Ret = nullptr;
-	if (auto& Mgr = ObjectDataRegistry::GetStorage(true))
-	{
-		Ret = Mgr->GetObjectData(Obj, Key);
-		if (!Ret)
-		{
-			auto Data = Func();
-			Ret = Data.Get();
-			if (auto Actor = Cast<AActor>(Obj))
-			{
-				auto CDO = GetMutableDefault<UObjectDataRegistryHelper>();
-				const_cast<AActor*>(Actor)->OnDestroyed.AddUniqueDynamic(CDO, &UObjectDataRegistryHelper::OnActorDestroyed);
-			}
-			Mgr->AddObjectData(Obj, Key, MoveTemp(Data));
-		}
-	}
-	return Ret;
-}
-
 bool FObjectDataRegistry::DelDataPtr(const UObject* Obj, FName Key)
 {
 	if (auto& Mgr = ObjectDataRegistry::GetStorage())
@@ -271,4 +252,33 @@ DEFINE_FUNCTION(UObjectDataRegistryHelper::execDelObjectData)
 void UObjectDataRegistryHelper::DeleteObjectDataByName(const UObject* KeyObj, FName Name)
 {
 	FObjectDataRegistry::DelDataPtr(KeyObj, Name);
+}
+
+GS_PRIVATEACCESS_FUNCTION_NAME(UObjectDataRegistryHelper, OnActorDestroyed, void(AActor*))
+void* FObjectDataRegistry::GetDataPtr(const UObject* Obj, FName Key, const TFunctionRef<TSharedPtr<void>()>& Func)
+{
+	void* Ret = nullptr;
+	if (auto& Mgr = ObjectDataRegistry::GetStorage(true))
+	{
+		Ret = Mgr->GetObjectData(Obj, Key);
+		if (!Ret)
+		{
+			auto Data = Func();
+			Ret = Data.Get();
+			if (auto Actor = Cast<AActor>(Obj))
+			{
+				static FName OnActorDestroyedName = PrivateAccess::UObjectDataRegistryHelper::OnActorDestroyed;
+				auto Helper = UGenericSingletons::GetSingleton<UObjectDataRegistryHelper>(Obj);
+				auto& OnDestroyed = const_cast<AActor*>(Actor)->OnDestroyed;
+				if (OnDestroyed.Contains(Helper, OnActorDestroyedName))
+				{
+					TBaseDynamicDelegate<FWeakObjectPtr, void, AActor*> Delegate;
+					Delegate.BindUFunction(Helper, OnActorDestroyedName);
+					OnDestroyed.Add(Delegate);
+				}
+			}
+			Mgr->AddObjectData(Obj, Key, MoveTemp(Data));
+		}
+	}
+	return Ret;
 }

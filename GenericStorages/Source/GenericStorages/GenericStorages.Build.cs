@@ -1,4 +1,4 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
 
@@ -37,10 +37,6 @@ public class GenericStorages : ModuleRules
 
 		if (Target.Type == TargetRules.TargetType.Editor)
 		{
-			PublicIncludePaths.AddRange(new string[]{
-				ModuleDirectory + "/Editor",
-			});
-
 			PrivateDependencyModuleNames.AddRange(new string[]{
 				"UnrealEd",
 				"SlateCore",
@@ -52,7 +48,17 @@ public class GenericStorages : ModuleRules
 				"KismetWidgets",
 				"ClassViewer",
 				"PropertyEditor",
+				"Settings",
 			});
 		}
-	}
+        BuildVersion Version;
+        if (BuildVersion.TryRead(BuildVersion.GetDefaultFileName(), out Version))
+        {
+            bool bUE_USE_FPROPERTY = (Version.MajorVersion > 4 || (Version.MajorVersion == 4 && Version.MinorVersion >= 25));
+            if (bUE_USE_FPROPERTY)
+                PublicDefinitions.Add("UE_USE_UPROPERTY=0");
+            else
+                PublicDefinitions.Add("UE_USE_UPROPERTY=1");
+        }
+    }
 }

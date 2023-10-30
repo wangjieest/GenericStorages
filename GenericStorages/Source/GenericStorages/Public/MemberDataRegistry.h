@@ -1,125 +1,119 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
 #include "CoreMinimal.h"
 
-#include "UnrealCompatibility.h"
+#include "WorldLocalStorages.h"
 
-#include "MemberDataRegistry.generated.h"
-
-USTRUCT(BlueprintType)
-struct GENERICSTORAGES_API FMemberDataRegistryTag
+struct GENERICSTORAGES_API FWeakMemberDataTag
 {
-	GENERATED_BODY()
-public:
-	FMemberDataRegistryTag();
-	~FMemberDataRegistryTag();
-	FMemberDataRegistryTag(FMemberDataRegistryTag&& Other) = default;
-	FMemberDataRegistryTag& operator=(FMemberDataRegistryTag&& Other) = default;
-	FMemberDataRegistryTag(const FMemberDataRegistryTag& Other) = default;
-	FMemberDataRegistryTag& operator=(const FMemberDataRegistryTag& Other) = default;
-
+#if WITH_EDITOR
 protected:
 	FWeakObjectPtr Outer;
-	friend struct FMemberDataRegistry;
-};
 
-#define STATIC_VERIFY_STORAGE_TYPE(T) static_assert(TIsDerivedFrom<T, FMemberDataRegistryTag>::IsDerived, "err")
-
-//////////////////////////////////////////////////////////////////////////
-
-// Obj and Prop
-USTRUCT()
-struct GENERICSTORAGES_API FMemberDataRegistryType
-{
-	GENERATED_BODY()
 public:
-	UPROPERTY()
-	UObject* Obj = nullptr;
-
-	FStructProperty* Prop = nullptr;
-
-	template<typename T>
-	T* GetDataPtr() const
-	{
-		STATIC_VERIFY_STORAGE_TYPE(T);
-		checkSlow(Prop && Prop->Struct && Prop->Struct->IsA<T>());
-		return ensure(IsValid(Obj)) ? Prop->ContainerPtrToValuePtr<T>(Obj) : nullptr;
-	}
-};
-
-UCLASS(Transient)
-class UMemberDataRegistryStorage : public UObject
-{
-	GENERATED_BODY()
-public:
-	UPROPERTY(Transient)
-	TMap<UScriptStruct*, FMemberDataRegistryType> DataStore;
-};
-
-//////////////////////////////////////////////////////////////////////////
-
-struct GENERICSTORAGES_API FMemberDataRegistry
-{
-public:
-	template<typename T>
-	static T* GetStorage(const UObject* WorldContextObj = nullptr)
-	{
-		STATIC_VERIFY_STORAGE_TYPE(T);
-		if (FMemberDataRegistryType* Found = GetStorageCell(T::StaticStruct(), WorldContextObj))
-		{
-			return Found->GetDataPtr<T>();
-		}
-		return nullptr;
-	}
-
-	template<typename T>
-	static T& GetStorage(T& Defualt, const UObject* WorldContextObj = nullptr)
-	{
-		if (T* Data = GetStorage<T>(WorldContextObj))
-		{
-			return *Data;
-		}
-		return Defualt;
-	}
-
-	template<typename C, typename T>
-	static bool RegitserStorage(UObject* Object, FName MemberStructName, bool bReplaceExist = false)
-	{
-		STATIC_VERIFY_STORAGE_TYPE(T);
-#if WITH_EDITOR
-		static FName TypeName = PropName;
-		ensure(TypeName == PropName);
+	UObject* GetOuter() const { return Outer.Get(); }
 #endif
-		static auto Prop = FMemberDataRegistry::FindStructProperty<C, T>(MemberStructName);
-		check(Object && Prop);
-		if (!Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+
+public:
+	FWeakMemberDataTag();
+};
+
+//////////////////////////////////////////////////////////////////////////
+struct GENERICSTORAGES_API FWeakMemberData
+{
+protected:
+	TWeakObjectPtr<UObject> Obj;
+	void* Ptr = nullptr;
+#if WITH_EDITOR
+	FStructProperty* Prop = nullptr;
+#endif
+	bool IsValid() const { return (Obj.IsValid() && Ptr); }
+};
+
+template<typename T>
+struct TWeakMemberData : public FWeakMemberData
+{
+protected:
+	friend struct FMemberDataRegistry;
+	static_assert(TIsDerivedFrom<T, FWeakMemberDataTag>::IsDerived, "err");
+
+	T* GetMemberPtr() const
+	{
+#if WITH_EDITOR
+		checkSlow(!Prop || (Prop->Struct && Prop->Struct->IsA<T>()));
+		auto Ret = ensure(FWeakMemberData::IsValid()) ? Prop->ContainerPtrToValuePtr<T>(Obj.Get()) : nullptr;
+		ensure(!Ret || Ret == Ptr);
+		return Ret;
+#else
+		return IsValid() ? reinterpret_cast<T*>(Ptr) : nullptr;
+#endif
+	}
+
+#if WITH_EDITOR
+	template<typename C>
+	static FStructProperty* FindStructProperty(FName PropName)
+	{
+		FStructProperty* Prop = FindFieldChecked<FStructProperty>(C::StaticClass(), PropName);
+		checkSlow(Prop->Struct == T::StaticStruct());
+		return Prop;
+	}
+#endif
+
+	static T* GetStorage(const UObject* WorldContextObj) { return WorldLocalStorages::GetLocalValue<TWeakMemberData<T>>(WorldContextObj, false); }
+
+	static T& GetStorage(T& Default, const UObject* WorldContextObj)
+	{
+		auto* Data = GetStorage(WorldContextObj);
+		return Data ? *Data : Default;
+	}
+
+	template<typename C, std::enable_if_t<std::is_base_of<UObject, std::decay_t<C>>::value>* = nullptr>
+	static bool RegisterStorage(C* This, T(C::*Data), FName DataName)
+	{
+#if WITH_EDITOR
+		static FName TypeMemberName = DataName;
+		ensure(TypeMemberName == DataName);
+		static auto Prop = TWeakMemberData<T>::template FindStructProperty<C>(DataName);
+		check(This && Prop);
+		checkSlow(T::StaticStruct() == Prop->Struct);
+		checkSlow(C::StaticClass() == Prop->GetOuter());
+#endif
+		if (!This->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject) && ensure(C::StaticClass() == This->GetClass()))
 		{
-			checkSlow(T::StaticStruct() == Prop->Struct);
-			checkSlow(C::StaticClass() == Prop->GetOuter());
-			if (ensure(C::StaticClass() == Object->GetClass()))
-			{
-				return SetStorageCell(T::StaticStruct(), Object, Prop, bReplaceExist);
-			}
+			auto& WeakStore = WorldLocalStorages::GetLocalValue<TWeakMemberData<T>>(This);
+			WeakStore.Obj = This;
+			WeakStore.Ptr = &(This->*Data);
+#if WITH_EDITOR
+			WeakStore.Prop = Prop;
+			ensureAlways(WeakStore.GetMemberPtr()->GetOuter() == This);
+#endif
+			return true;
 		}
 		return false;
 	}
-
-protected:
-	template<typename C, typename T>
-	static FStructProperty* FindStructProperty(FName PropName)
-	{
-		FStructProperty* TheProp = [&] {
-			FStructProperty* Prop = FindFieldChecked<FStructProperty>(C::StaticClass(), PropName);
-			checkSlow(Prop->Struct == T::StaticStruct());
-			return Prop;
-		}();
-		return TheProp;
-	}
-
-	static FMemberDataRegistryType* GetStorageCell(UScriptStruct* Struct, const UObject* WorldContextObj = nullptr);
-	static bool SetStorageCell(UScriptStruct* Struct, UObject* Object, FStructProperty* Prop, bool bReplaceExist);
 };
 
-#define MEMBER_DATA_BIND(Class, Member) FMemberDataRegistry::RegitserStorage<Class, decltype(Class::Member)>(this, GET_MEMBER_NAME_CHECKED(Class, Member), true)
+struct FMemberDataRegistry
+{
+	template<typename T>
+	static T* GetStorage(const UObject* WorldContextObj)
+	{
+		return TWeakMemberData<T>::GetStorage(WorldContextObj);
+	}
+
+	template<typename T>
+	static T& GetStorage(T& Default, const UObject* WorldContextObj)
+	{
+		return TWeakMemberData<T>::GetStorage(Default, WorldContextObj);
+	}
+
+	template<typename C, typename T>
+	static bool RegisterStorage(C* This, T(C::*Data), FName DataName)
+	{
+		return TWeakMemberData<T>::RegisterStorage(This, Data, DataName);
+	}
+};
+
+#define MEMBER_DATA_REGISTER(Class, Member) FMemberDataRegistry::RegisterStorage(this, &Class::Member, GET_MEMBER_NAME_CHECKED(Class, Member), true)

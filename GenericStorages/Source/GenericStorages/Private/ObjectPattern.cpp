@@ -1,4 +1,4 @@
-// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #include "ObjectPattern.h"
 
@@ -11,14 +11,14 @@ FCriticalSection UObjectPattern::Critical;
 
 UObjectPattern::FCSLock423::FCSLock423()
 {
-#if ENGINE_MINOR_VERSION >= 23
+#if UE_4_23_OR_LATER
 	UObjectPattern::Critical.Lock();
 #endif
 }
 
 UObjectPattern::FCSLock423::~FCSLock423()
 {
-#if ENGINE_MINOR_VERSION >= 23
+#if UE_4_23_OR_LATER
 	UObjectPattern::Critical.Unlock();
 #endif
 }
@@ -57,12 +57,12 @@ void EachClass(UObject* Object, const F& f)
 	}
 }
 
-TArray<FObjectPatternType> Storage = {{}};
+TArray<FObjectPatternType> Storage;
 auto AllocNewStorage(int32& Index)
 {
 	if (Index == 0)
 	{
-		Index = Storage.Add(FObjectPatternType{MakeShared<FWeakObjectArray>()});
+		Index = Storage.Add(FObjectPatternType{MakeShared<FObjectPatternType::FWeakObjectArray>()});
 	}
 	return Index;
 }
@@ -106,7 +106,7 @@ bool UObjectPattern::EditorIsGameWorld(const UObject* WorldContextObj)
 }
 #endif
 
-FWeakObjectArray::TIterator FObjectPatternType::CreateIterator()
+FObjectPatternType::FWeakObjectArray::TIterator FObjectPatternType::CreateIterator()
 {
 	check(IsValid());
 	return Objects->CreateIterator();
@@ -137,7 +137,7 @@ void UObjectPattern::SetObject(UObject* Object, UClass* StopClass)
 	}
 }
 
-FWeakObjectArray::TIterator UObjectPattern::NativeIterator(int32 Index)
+FObjectPatternType::FWeakObjectArray::TIterator UObjectPattern::NativeIterator(int32 Index)
 {
 	if (ensure(Index > 0 && Index < ObjectPattern::Storage.Num()))
 	{
@@ -145,7 +145,7 @@ FWeakObjectArray::TIterator UObjectPattern::NativeIterator(int32 Index)
 	}
 	else
 	{
-		static FWeakObjectArray NullObjects;
+		static FObjectPatternType::FWeakObjectArray NullObjects;
 		return NullObjects.CreateIterator();
 	}
 }
@@ -187,7 +187,7 @@ UObjectPattern* UObjectPattern::Get(const UObject* Obj)
 	else
 #endif
 	{
-		return UGenericSingletons::GetSingleton<UObjectPattern>(nullptr);
+		return UGenericSingletons::GetSingleton<UObjectPattern>((UObject*)nullptr);
 	}
 }
 
@@ -282,7 +282,7 @@ void UObjectPattern::AddObjectToRegistry(UObject* Object, UClass* StopClass)
 		check(ObjectPattern::Storage.IsValidIndex(ObjectPattern::ClassToID[CurClass]));
 #endif
 		FObjectPatternType& Found = Binddings.FindOrAdd(CurClass);
-		if (!Found.Objects)
+		if (!Found.Objects.IsValid())
 		{
 			Found.Objects = ObjectPattern::Storage[ObjectPattern::ClassToID.FindChecked(CurClass)].Objects;
 		}

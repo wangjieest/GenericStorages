@@ -1,4 +1,4 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -14,11 +14,11 @@ template<typename T>
 struct TObjectDataTypeName
 {
 	static auto GetFName() { return T::StaticStruct()->GetFName(); }
-	template<typename... Args>
-	static TSharedPtr<void> Create(Args&&... args)
+	template<typename... TArgs>
+	static TSharedPtr<void> Create(TArgs&&... Args)
 	{
 		using DT = TDecay<T>;
-		return TSharedPtr<void>(new DT(MoveTempIfPossible(args)...), [](void* p) { delete static_cast<DT*>(p); });
+		return TSharedPtr<void>(new DT(Forward<TArgs>(Args)...), [](void* Ptr) { delete static_cast<DT*>(Ptr); });
 	}
 };
 }  // namespace ObjectDataRegistry
@@ -30,16 +30,16 @@ struct TObjectDataTypeName
 		struct TObjectDataTypeName<T>                                                                                      \
 		{                                                                                                                  \
 			static auto GetFName() { return TEXT(#T); }                                                                    \
-			template<typename... Args>                                                                                     \
-			static TSharedPtr<void> Create(Args&&... args)                                                                 \
+			template<typename... TArgs>                                                                                    \
+			static TSharedPtr<void> Create(TArgs&&... Args)                                                                \
 			{                                                                                                              \
 				using DT = TDecay<T>;                                                                                      \
-				return TSharedPtr<void>(new DT(MoveTempIfPossible(args)...), [](void* p) { delete static_cast<DT*>(p); }); \
+				return TSharedPtr<void>(new DT(Forward<TArgs>(Args)...), [](void* Ptr) { delete static_cast<DT*>(Ptr); }); \
 			}                                                                                                              \
 		};                                                                                                                 \
 	}
 
-// current support structs has none uobject refs. use weakobject instead!
+// currently it does not support the object refs in ustruct. use weakobjectptr instead!
 struct FObjectDataRegistry
 {
 public:
@@ -47,21 +47,21 @@ public:
 	static T* FindStorageData(const UObject* Obj)
 	{
 		check(IsValid(Obj));
-		return (T*)FindDataPtr(Obj, TObjectDataTypeName<T>::GetFName());
+		return (T*)FindDataPtr(Obj, ObjectDataRegistry::TObjectDataTypeName<T>::GetFName());
 	}
 
-	template<typename T, typename... Args>
-	static T* GetStorageData(const UObject* Obj, Args&&... args)
+	template<typename T, typename... TArgs>
+	static T* GetStorageData(const UObject* Obj, TArgs&&... Args)
 	{
 		check(IsValid(Obj));
-		return (T*)GetDataPtr(Obj, TObjectDataTypeName<T>::GetFName(), TObjectDataTypeName<T>::Create(MoveTempIfPossible(args)...));
+		return (T*)GetDataPtr(Obj, ObjectDataRegistry::TObjectDataTypeName<T>::GetFName(), ObjectDataRegistry::TObjectDataTypeName<T>::Create(Forward<TArgs>(Args)...));
 	}
 
 	template<typename T>
 	static bool RemoveStorageData(UObject* Obj)
 	{
 		check(IsValid(Obj));
-		return DelDataPtr(Obj, TObjectDataTypeName<T>::GetFName());
+		return DelDataPtr(Obj, ObjectDataRegistry::TObjectDataTypeName<T>::GetFName());
 	}
 
 protected:
@@ -73,23 +73,22 @@ protected:
 
 // For Blueprint
 UCLASS()
-class UObjectDataRegistryHelper : public UBlueprintFunctionLibrary
+class UObjectDataRegistryHelper final : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
 protected:
-	UFUNCTION(BlueprintCallable, CustomThunk, meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj", CustomStructureParam = "Data", bWriteData = true))
+	UFUNCTION(BlueprintCallable, Category = "ObjectDataRegistryHelper", CustomThunk, meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj", CustomStructureParam = "Data", bWriteData = true))
 	static void GetObjectData(const UObject* KeyObj, bool bWriteData, bool& bSucc, UPARAM(Ref) int32& Data);
 	DECLARE_FUNCTION(execGetObjectData);
-	UFUNCTION(BlueprintCallable, CustomThunk, meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj", CustomStructureParam = "Data"))
+	UFUNCTION(BlueprintCallable, Category = "ObjectDataRegistryHelper", CustomThunk, meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj", CustomStructureParam = "Data"))
 	static void DelObjectData(const UObject* KeyObj, UPARAM(Ref) int32& Data);
 	DECLARE_FUNCTION(execDelObjectData);
 
-	UFUNCTION(BlueprintCallable, meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj"))
+	UFUNCTION(BlueprintCallable, Category = "ObjectDataRegistryHelper", meta = (CallableWithoutWorldContext, DefaultToSelf = "KeObj"))
 	static void DeleteObjectDataByName(const UObject* KeyObj, FName Name);
 
 private:
-	friend struct FObjectDataRegistry;
 	UFUNCTION()
 	void OnActorDestroyed(class AActor* InActor);
 };

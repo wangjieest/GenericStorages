@@ -1,4 +1,4 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -12,13 +12,12 @@
 template<typename T>
 struct TEachObjectPattern;
 
-using FWeakObjectArray = TArray<FWeakObjectPtr>;
-
 USTRUCT()
 struct GENERICSTORAGES_API FObjectPatternType
 {
 	GENERATED_BODY()
 public:
+	using FWeakObjectArray = TArray<FWeakObjectPtr>;
 	TSharedPtr<FWeakObjectArray> Objects;
 	bool IsValid() const { return Objects.IsValid(); }
 	UObject* FirstObject() const
@@ -36,7 +35,7 @@ public:
 
 //////////////////////////////////////////////////////////////////////////
 
-UCLASS(Transient)
+UCLASS(Transient, meta = (NeuronAction))
 class GENERICSTORAGES_API UObjectPattern : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
@@ -56,6 +55,15 @@ public:
 
 	static void EachObject(const UObject* WorldContextObj, UClass* Class, const TFunctionRef<void(UObject*)>& f);
 
+	DECLARE_DYNAMIC_DELEGATE_OneParam(FOnEachObjectAction, UObject*, Obj);
+	UFUNCTION(BlueprintCallable, BlueprintInternalUseOnly, Category = "Game", meta = (NeuronAction, DisplayName = "EachObject", WorldContext = "WorldContextObj", HidePin = "WorldContextObj"))
+	static void EachObject(const UObject* WorldContextObj, UClass* Class, UPARAM(meta = (DeterminesOutputType = "Class", DynamicOutputParam = "Obj")) FOnEachObjectAction OnEachObj)
+	{
+		if (ensure(Class))
+		{
+			UObjectPattern::EachObject(WorldContextObj, Class, [&](auto a) { OnEachObj.ExecuteIfBound(a); });
+		}
+	}
 	template<typename T>
 	static T* GetObject(const UObject* WorldContextObj)
 	{
@@ -95,10 +103,10 @@ public:
 			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
 			check(IsValid(Obj));
 			check(Obj->IsA(T::StaticClass()));
-#	if 0
+#if 0
 			static_assert(std::is_final<T>::value, "err");
 			check(FindFirstNativeClass(Obj->GetClass()) == T::StaticClass());
-#	endif
+#endif
 #endif
 			ensure(GIsEditor || !TypeObject<T>.IsValid());
 			TypeObject<T> = Obj;
@@ -135,7 +143,7 @@ protected:
 		check(Index);
 		return NativeIterator(Index);
 	}
-	static FWeakObjectArray::TIterator NativeIterator(int32 Index);
+	static FObjectPatternType::FWeakObjectArray::TIterator NativeIterator(int32 Index);
 
 	//////////////////////////////////////////////////////////////////////////
 	template<typename T>
@@ -151,10 +159,10 @@ protected:
 		check(Obj->IsA(T::StaticClass()));
 		if (Obj->HasAnyFlags(RF_Transactional))
 			return;
-#	if 0
+#if 0
 		static_assert(std::is_final<T>::value, "err");
 		check(FindFirstNativeClass(Obj->GetClass()) == T::StaticClass());
-#	endif
+#endif
 #endif
 
 		if (Obj->HasAnyFlags(RF_ArchetypeObject | RF_DefaultSubObject))
@@ -203,10 +211,10 @@ protected:
 			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
 			check(Obj->IsA(T::StaticClass()));
 
-#	if 0
+#if 0
 			static_assert(std::is_final<T>::value, "err");
 			check(FindFirstNativeClass(Obj->GetClass()) == T::StaticClass());
-#	endif
+#endif
 			if (GIsEditor)
 			{
 				if (auto Mgr = Get(Obj))

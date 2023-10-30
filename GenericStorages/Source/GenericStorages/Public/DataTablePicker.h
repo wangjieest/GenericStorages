@@ -1,4 +1,4 @@
-﻿// Copyright 2018-2020 wangjieest, Inc. All Rights Reserved.
+﻿// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -12,6 +12,7 @@
 #include "DataTablePicker.generated.h"
 
 //////////////////////////////////////////////////////////////////////////
+// meta=(DataTableType="RowSructType")
 USTRUCT(BlueprintType)
 struct GENERICSTORAGES_API FDataTablePicker
 {
