@@ -68,8 +68,6 @@ class GENERICSTORAGES_API UGenericLocalStore : public UObject
 {
 	GENERATED_BODY()
 public:
-	UGenericLocalStore();
-
 	static void AddReferencedObjects(UObject* InThis, FReferenceCollector& Collector)
 	{
 		UGenericLocalStore* This = CastChecked<UGenericLocalStore>(InThis);
@@ -80,17 +78,7 @@ public:
 	using CtxType = UObject;
 	static UObject* GetCtx(const UObject* InCtx)
 	{
-		UWorld* World = nullptr;
-#if WITH_EDITOR && 0
-		if (GIsEditor && !InCtx)
-		{
-			World = GEditor->GetEditorWorldContext(false).World();
-		}
-		else
-#endif
-		{
-			World = WorldLocalStorages::TContextPolicy<UWorld>::GetCtx(InCtx);
-		}
+		UWorld* World = WorldLocalStorages::TContextPolicy<UWorld>::GetCtx(InCtx);
 		return World && World->IsGameWorld() ? GetPieObject(World) : World;
 	}
 
@@ -114,21 +102,22 @@ class GENERICSTORAGES_API UGenericLocalStoreEditor : public UGenericLocalStore
 {
 	GENERATED_BODY()
 public:
+#if WITH_EDITOR
 	static UObject* GetCtx(const UObject* InCtx)
 	{
-		UWorld* World = nullptr;
-#if WITH_EDITOR
 		if (GIsEditor && !InCtx)
 		{
-			World = GEditor->GetEditorWorldContext(false).World();
+			return GetEditorWorld();
 		}
 		else
-#endif
 		{
-			World = WorldLocalStorages::TContextPolicy<UWorld>::GetCtx(InCtx);
+			return Super::GetCtx(InCtx);
 		}
-		return (World && World->IsGameWorld()) ? UGenericLocalStore::GetPieObject(World) : World;
 	}
+
+protected:
+	static UWorld* GetEditorWorld(bool bEnsureIsGWorld = false);
+#endif
 };
 
 template<typename T, typename V = void>

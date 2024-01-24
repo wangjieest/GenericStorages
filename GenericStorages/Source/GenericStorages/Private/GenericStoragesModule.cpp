@@ -72,7 +72,6 @@ static FDelayedAutoRegisterHelper DelayOnEngineInitCompleted(EDelayedRegisterRun
 
 bool DelayExec(const UObject* InObj, FSimpleDelegate Delegate, float InDelay, bool bEnsureExec)
 {
-	FTimerHandle TimerHandle;
 	InDelay = FMath::Max(InDelay, 0.00001f);
 	auto World = GEngine->GetWorldFromContextObject(InObj, InObj ? EGetWorldErrorMode::LogAndReturnNull : EGetWorldErrorMode::ReturnNull);
 #if WITH_EDITOR
@@ -80,6 +79,7 @@ bool DelayExec(const UObject* InObj, FSimpleDelegate Delegate, float InDelay, bo
 	{
 		if (GEditor && GEditor->IsTimerManagerValid())
 		{
+			FTimerHandle TimerHandle;
 			GEditor->GetTimerManager()->SetTimer(TimerHandle, MoveTemp(Delegate), InDelay, false);
 		}
 		else
@@ -114,6 +114,7 @@ bool DelayExec(const UObject* InObj, FSimpleDelegate Delegate, float InDelay, bo
 		ensure(!bEnsureExec || World);
 		if (World)
 		{
+			FTimerHandle TimerHandle;
 			World->GetTimerManager().SetTimer(TimerHandle, MoveTemp(Delegate), InDelay, false);
 			return true;
 		}
@@ -122,13 +123,10 @@ bool DelayExec(const UObject* InObj, FSimpleDelegate Delegate, float InDelay, bo
 }
 
 TWeakObjectPtr<UObject> WeakPieObj;
-
-}  // namespace GenericStorages
-
-UGenericLocalStore::UGenericLocalStore()
-{
 #if WITH_EDITOR
-	if (TrueOnFirstCall([] {}))
+void InitWeakPieObj()
+{
+	if (IsInGameThread() && TrueOnFirstCall([] {}))
 	{
 		FEditorDelegates::PreBeginPIE.AddLambda([](bool) {
 			auto Obj = NewObject<UGenericLocalStore>();
@@ -141,8 +139,9 @@ UGenericLocalStore::UGenericLocalStore()
 			GenericStorages::WeakPieObj = nullptr;
 		});
 	}
-#endif
 }
+#endif
+}  // namespace GenericStorages
 
 UObject* UGenericLocalStore::GetPieObject(const UWorld* InCtx)
 {
@@ -170,6 +169,7 @@ public:
 		GenericStorages::OnModuleStarted.Clear();
 
 #if WITH_EDITOR
+		GenericStorages::InitWeakPieObj();
 		CustomGraphPinPicker::RegInterfaceClassSelectorFactory();
 		CustomGraphPinPicker::RegInterfaceObjectFilterFactory();
 		CustomGraphPinPicker::RegInterfaceDataTableFilterFactory();

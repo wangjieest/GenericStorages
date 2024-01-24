@@ -5,7 +5,9 @@
 
 #include "Slate.h"
 
-#include "ARFilter.h"
+#include "AssetRegistry/ARFilter.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "DataTableEditorUtils.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -22,7 +24,6 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "GameFramework/Actor.h"
 #include "GenericSingletons.h"
-#include "IAssetRegistry.h"
 #include "ISettingsModule.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Misc/PackageName.h"
@@ -33,11 +34,7 @@
 #include "UObject/TextProperty.h"
 #include "UObject/UObjectGlobals.h"
 #include "Widgets/Notifications/SNotificationList.h"
-#if UE_5_01_OR_LATER
-#include "AssetRegistry/AssetRegistryModule.h"
-#else
-#include "AssetRegistryModule.h"
-#endif
+
 namespace UnrealEditorUtils
 {
 GS_PRIVATEACCESS_STATIC_MEMBER(FEdGraphUtilities, VisualPinFactories, TArray<TSharedPtr<FGraphPanelPinFactory>>)
@@ -137,7 +134,11 @@ TArray<FSoftObjectPath> EditorSyncScan(UClass* Type, const FString& Dir)
 			ContentPaths.Add(Dir);
 			AssetRegistry.ScanPathsSynchronous(ContentPaths);
 			FARFilter Filter;
+#if UE_5_00_OR_LATER
+			Filter.ClassPaths.Add(FTopLevelAssetPath(Type));
+#else
 			Filter.ClassNames.Add(Type->GetFName());
+#endif
 			Filter.bRecursiveClasses = true;
 			Filter.PackagePaths.Add(*Dir);
 			Filter.bRecursivePaths = true;
@@ -217,14 +218,17 @@ bool RegisterSettings(const FName& ContainerName, const FName& CategoryName, con
 	return false;
 }
 
-bool AddConfigurationOnProject(UObject* Obj, const FName& CategoryName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
+bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
 {
 	if (GIsEditor && Obj && (!bOnlyCDO || Obj->HasAnyFlags(RF_ClassDefaultObject)) && (!bOnlyNative || Obj->GetClass()->IsNative()) && (bAllowAbstract || !Obj->GetClass()->HasAllClassFlags(CLASS_Abstract)))
 	{
+		static FName ExtraConfiguration = TEXT("ExtraConfiguration");
+		static TOptional<FName> SessionNameCache;
 		GenericStorages::CallOnPluginReady(FSimpleDelegate::CreateWeakLambda(Obj, [=] {
 			auto Name = Obj->GetName();
 			Name.RemoveFromStart(TEXT("Default__"));
-			RegisterSettings("Project", CategoryName, *Name, FText::FromString(Name), FText::GetEmpty(), Obj);
+			FName SectionName = SessionName.IsNone() ? SessionNameCache.Get(*Name) : SessionName;
+			RegisterSettings("Project", ExtraConfiguration, SectionName, FText::FromName(SectionName), FText::GetEmpty(), Obj);
 #if 0
 			for (auto& Pair : TPropertyValueRange<FProperty>(Obj->GetClass(), Obj, EPropertyValueIteratorFlags::NoRecursion, EFieldIteratorFlags::ExcludeDeprecated))
 			{
@@ -564,30 +568,23 @@ TSharedRef<SWidget> FDatatableTypePicker::MakeWidget()
 	RowStructs.Append(FDataTableEditorUtils::GetPossibleStructs());
 #endif
 	SAssignNew(MyWidget, SComboBox<UScriptStruct*>)
-	.OptionsSource(&RowStructs)
-	.InitiallySelectedItem(ScriptStruct.Get())
-	.OnGenerateWidget_Lambda([](UScriptStruct* InStruct) {
-		return SNew(STextBlock)
-		.Text(InStruct ? InStruct->GetDisplayNameText() : FText::GetEmpty());
-	})
-	.OnSelectionChanged_Lambda([this](UScriptStruct* InStruct, ESelectInfo::Type SelectInfo) {
-		if (SelectInfo == ESelectInfo::OnNavigation)
-		{
-			return;
-		}
-		if (ScriptStruct != InStruct)
-		{
-			ScriptStruct = InStruct;
-			OnChanged.ExecuteIfBound();
-		}
-	})
-	[
-		SNew(STextBlock)
-		.Text_Lambda([this]() {
+		.OptionsSource(&RowStructs)
+		.InitiallySelectedItem(ScriptStruct.Get())
+		.OnGenerateWidget_Lambda([](UScriptStruct* InStruct) { return SNew(STextBlock).Text(InStruct ? InStruct->GetDisplayNameText() : FText::GetEmpty()); })
+		.OnSelectionChanged_Lambda([this](UScriptStruct* InStruct, ESelectInfo::Type SelectInfo) {
+			if (SelectInfo == ESelectInfo::OnNavigation)
+			{
+				return;
+			}
+			if (ScriptStruct != InStruct)
+			{
+				ScriptStruct = InStruct;
+				OnChanged.ExecuteIfBound();
+			}
+		})[SNew(STextBlock).Text_Lambda([this]() {
 			UScriptStruct* RowStruct = ScriptStruct.Get();
 			return RowStruct ? RowStruct->GetDisplayNameText() : FText::GetEmpty();
-		})
-	];
+		})];
 
 	return MyWidget.ToSharedRef();
 }
@@ -598,60 +595,60 @@ TSharedRef<SWidget> FDatatableTypePicker::MakePropertyWidget(TSharedPtr<IPropert
 	LoadTableTypes(FilterPath);
 	TSharedPtr<SWidget> RetWidget;
 	SAssignNew(RetWidget, SObjectPropertyEntryBox)
-	.PropertyHandle(SoftHandle)
-	.AllowedClass(UDataTable::StaticClass())
-	.OnShouldSetAsset_Lambda([bValidate{this->bValidate}, Type{this->ScriptStruct}, FilterPath{this->FilterPath}](const FAssetData& AssetData) {
-		if (!bValidate)
-			return true;
-		if (auto DataTable = Cast<UDataTable>(AssetData.GetAsset()))
-		{
-			FDatatableTypePicker::UpdateTableType(DataTable);
-			if (!Type.IsValid() || DataTable->RowStruct == Type)
+		.PropertyHandle(SoftHandle)
+		.AllowedClass(UDataTable::StaticClass())
+		.OnShouldSetAsset_Lambda([bValidate{this->bValidate}, Type{this->ScriptStruct}, FilterPath{this->FilterPath}](const FAssetData& AssetData) {
+			if (!bValidate)
 				return true;
-		}
-		return false;
-	})
-	.OnShouldFilterAsset_Lambda([Type{this->ScriptStruct}, FilterPath{this->FilterPath}](const FAssetData& AssetData) {
-		bool bFilterOut = true;
-		do
-		{
-			auto Path = AssetData.ToSoftObjectPath();
-			if (FilterPath.IsEmpty() || Path.ToString().StartsWith(FilterPath))
+			if (auto DataTable = Cast<UDataTable>(AssetData.GetAsset()))
 			{
-				auto DataTable = Cast<UDataTable>(Path.ResolveObject());
-				if (DataTable)
+				FDatatableTypePicker::UpdateTableType(DataTable);
+				if (!Type.IsValid() || DataTable->RowStruct == Type)
+					return true;
+			}
+			return false;
+		})
+		.OnShouldFilterAsset_Lambda([Type{this->ScriptStruct}, FilterPath{this->FilterPath}](const FAssetData& AssetData) {
+			bool bFilterOut = true;
+			do
+			{
+				auto Path = AssetData.ToSoftObjectPath();
+				if (FilterPath.IsEmpty() || Path.ToString().StartsWith(FilterPath))
 				{
-					FDatatableTypePicker::UpdateTableType(DataTable);
-					if (Type.IsValid() && DataTable->RowStruct != Type)
-						break;
-					bFilterOut = false;
-				}
-				else
-				{
-					auto Find = TableCacheTypes.Find(Path);
-					if (Find && Find->IsValid())
+					auto DataTable = Cast<UDataTable>(Path.ResolveObject());
+					if (DataTable)
 					{
-						if (Type.IsValid() && *Find != Type)
-							break;
-						bFilterOut = false;
-					}
-					else
-					{
-						DataTable = Cast<UDataTable>(AssetData.GetAsset());
-						if (!DataTable)
-							break;
 						FDatatableTypePicker::UpdateTableType(DataTable);
 						if (Type.IsValid() && DataTable->RowStruct != Type)
 							break;
 						bFilterOut = false;
 					}
+					else
+					{
+						auto Find = TableCacheTypes.Find(Path);
+						if (Find && Find->IsValid())
+						{
+							if (Type.IsValid() && *Find != Type)
+								break;
+							bFilterOut = false;
+						}
+						else
+						{
+							DataTable = Cast<UDataTable>(AssetData.GetAsset());
+							if (!DataTable)
+								break;
+							FDatatableTypePicker::UpdateTableType(DataTable);
+							if (Type.IsValid() && DataTable->RowStruct != Type)
+								break;
+							bFilterOut = false;
+						}
+					}
 				}
-			}
-		} while (0);
-		return bFilterOut;
-	})
-	.AllowClear(bAllowClear)
-	.DisplayThumbnail(false);
+			} while (0);
+			return bFilterOut;
+		})
+		.AllowClear(bAllowClear)
+		.DisplayThumbnail(false);
 	return RetWidget.ToSharedRef();
 }
 
@@ -661,60 +658,60 @@ TSharedRef<SWidget> FDatatableTypePicker::MakeDynamicPropertyWidget(TSharedPtr<I
 	LoadTableTypes(FilterPath);
 	TSharedPtr<SWidget> RetWidget;
 	SAssignNew(RetWidget, SObjectPropertyEntryBox)
-	.PropertyHandle(SoftHandle)
-	.AllowedClass(UDataTable::StaticClass())
-	.OnShouldSetAsset_Lambda([this](const FAssetData& AssetData) {
-		if (!bValidate)
-			return true;
-		if (auto DataTable = Cast<UDataTable>(AssetData.GetAsset()))
-		{
-			FDatatableTypePicker::UpdateTableType(DataTable);
-			if (!ScriptStruct.IsValid() || DataTable->RowStruct == ScriptStruct)
+		.PropertyHandle(SoftHandle)
+		.AllowedClass(UDataTable::StaticClass())
+		.OnShouldSetAsset_Lambda([this](const FAssetData& AssetData) {
+			if (!bValidate)
 				return true;
-		}
-		return false;
-	})
-	.OnShouldFilterAsset_Lambda([this](const FAssetData& AssetData) {
-		bool bFilterOut = true;
-		do
-		{
-			auto Path = AssetData.ToSoftObjectPath();
-			if (FilterPath.IsEmpty() || Path.ToString().StartsWith(FilterPath))
+			if (auto DataTable = Cast<UDataTable>(AssetData.GetAsset()))
 			{
-				auto DataTable = Cast<UDataTable>(Path.ResolveObject());
-				if (DataTable)
+				FDatatableTypePicker::UpdateTableType(DataTable);
+				if (!ScriptStruct.IsValid() || DataTable->RowStruct == ScriptStruct)
+					return true;
+			}
+			return false;
+		})
+		.OnShouldFilterAsset_Lambda([this](const FAssetData& AssetData) {
+			bool bFilterOut = true;
+			do
+			{
+				auto Path = AssetData.ToSoftObjectPath();
+				if (FilterPath.IsEmpty() || Path.ToString().StartsWith(FilterPath))
 				{
-					FDatatableTypePicker::UpdateTableType(DataTable);
-					if (ScriptStruct.IsValid() && DataTable->RowStruct != ScriptStruct)
-						break;
-					bFilterOut = false;
-				}
-				else
-				{
-					auto Find = TableCacheTypes.Find(Path);
-					if (Find && Find->IsValid())
+					auto DataTable = Cast<UDataTable>(Path.ResolveObject());
+					if (DataTable)
 					{
-						if (ScriptStruct.IsValid() && *Find != ScriptStruct)
-							break;
-						bFilterOut = false;
-					}
-					else
-					{
-						DataTable = Cast<UDataTable>(AssetData.GetAsset());
-						if (!DataTable)
-							break;
 						FDatatableTypePicker::UpdateTableType(DataTable);
 						if (ScriptStruct.IsValid() && DataTable->RowStruct != ScriptStruct)
 							break;
 						bFilterOut = false;
 					}
+					else
+					{
+						auto Find = TableCacheTypes.Find(Path);
+						if (Find && Find->IsValid())
+						{
+							if (ScriptStruct.IsValid() && *Find != ScriptStruct)
+								break;
+							bFilterOut = false;
+						}
+						else
+						{
+							DataTable = Cast<UDataTable>(AssetData.GetAsset());
+							if (!DataTable)
+								break;
+							FDatatableTypePicker::UpdateTableType(DataTable);
+							if (ScriptStruct.IsValid() && DataTable->RowStruct != ScriptStruct)
+								break;
+							bFilterOut = false;
+						}
+					}
 				}
-			}
-		} while (0);
-		return bFilterOut;
-	})
-	.AllowClear(bAllowClear)
-	.DisplayThumbnail(false);
+			} while (0);
+			return bFilterOut;
+		})
+		.AllowClear(bAllowClear)
+		.DisplayThumbnail(false);
 	return RetWidget.ToSharedRef();
 }
 
@@ -739,7 +736,7 @@ bool ShouldEndPlayMap()
 #else
 namespace UnrealEditorUtils
 {
-bool AddConfigurationOnProject(UObject* Obj, const FName& CategoryName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
+bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
 {
 	return false;
 }

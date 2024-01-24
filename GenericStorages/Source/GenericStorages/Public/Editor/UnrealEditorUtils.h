@@ -25,14 +25,12 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "UnrealCompatibility.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
-#if UE_5_01_OR_LATER
+#include "EdGraph/EdGraphPin.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#else
-#include "AssetRegistryModule.h"
-#endif
 #if defined(GMP_API)
 #include "GMPCore.h"
 #endif
+
 class AActor;
 class UObject;
 class UDataTable;
@@ -171,13 +169,13 @@ GENERICSTORAGES_API bool RegisterSettings(const FName& ContainerName,
 										  const TWeakObjectPtr<UObject>& SettingsObject,
 										  ISettingsModule* InSettingsModule = nullptr);
 
-GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& CategoryName, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
+GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName = NAME_None, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
 GENERICSTORAGES_API bool ShouldEndPlayMap();
 }  // namespace UnrealEditorUtils
 #else
 namespace UnrealEditorUtils
 {
-GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& CategoryName, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
+GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName = NAME_None, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
 FORCEINLINE bool ShouldEndPlayMap()
 {
 	return false;

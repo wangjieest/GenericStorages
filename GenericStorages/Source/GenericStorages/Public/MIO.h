@@ -22,6 +22,7 @@ public:
 GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<uint8>> OpenMappedWrite(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = MAX_int64, bool bPreloadHint = false);
 GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<const uint8>> OpenMappedRead(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = 0, bool bPreloadHint = false);
 GENERICSTORAGES_API bool ChunkingFile(const TCHAR* Filename, TArray64<uint8>& Buffer, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda);
+GENERICSTORAGES_API FString ConvertToAbsolutePath(FString InOutPath);
 
 inline bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda, int32 InSize = 2048)
 {
@@ -30,23 +31,21 @@ inline bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(const TA
 	return ChunkingFile(Filename, Buffer, Lambda);
 }
 
-struct GENERICSTORAGES_API FMappedBuffer
+class GENERICSTORAGES_API FMappedBuffer
 {
 public:
-	FMappedBuffer(FGuid InId, uint32 InCapacity);
+	FMappedBuffer(FGuid InId, uint32 InCapacity, const TCHAR* SubDir = nullptr);
 
 	bool IsValid() const;
 	bool IsEmpty() const { return ReadIdx == WriteIdx; }
-
-	bool WillWrap(uint32 InSize) const;
-	bool WillFull(uint32 InSize) const;
-
-	bool Write(const void* Value, uint32 InSize, bool bContinuous = false);
-	uint32 ReadUntil(uint8 TestChar, TFunctionRef<void(uint8)> Op);
-	uint32 ReadUntil(uint8 TestChar);
-
 	FORCEINLINE uint32 Num() const { return IsWrap() ? (GetRegionSize() - WriteIdx + ReadIdx) : (WriteIdx - ReadIdx); }
 	FORCEINLINE uint32 Capacity() const { return GetRegionSize(); }
+	uint32 GetBufferLength() const { return IsWrap() ? GetRegionSize() : GetRegionSize() - WriteIdx; }
+	FString GetFilePath() { return Region ? Region->GetInfo() : TEXT(""); }
+
+public:
+	uint32 ReadUntil(uint8 TestChar, TFunctionRef<void(uint8)> Op);
+	uint32 ReadUntil(uint8 TestChar);
 
 	FORCEINLINE const uint8& Peek(uint32 Index) const
 	{
@@ -57,6 +56,13 @@ public:
 		return GetBuffer((ReadIdx + Index) % Capacity());
 	}
 	FORCEINLINE const uint8& operator[](uint32 Index) const { return Peek(Index); }
+
+public:
+	bool WillWrap(uint32 InSize) const;
+	bool WillFull(uint32 InSize, bool bContinuous = false) const;
+	uint8* Write(const void* Value, uint32 InSize, bool bContinuous = false);
+	FORCEINLINE uint32 GetWirteIdx() const { return WriteIdx; }
+	FORCEINLINE uint8* GetAddr(uint32 Idx = 0) const { return &GetBuffer(Idx); }
 
 protected:
 	uint32 WriteImpl(uint32 InLen, const void* InBuf);

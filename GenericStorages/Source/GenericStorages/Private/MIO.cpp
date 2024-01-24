@@ -1,7 +1,16 @@
 #include "MIO.h"
 
+#if PLATFORM_ANDROID
+#include "Android/AndroidPlatformMisc.h"
+#endif
+
 #include "GenericStoragesLog.h"
+#include "HAL/FileManager.h"
 #include "mio/mmap.hpp"
+
+#if PLATFORM_ANDROID
+extern FString AndroidRelativeToAbsolutePath(bool bUseInternalBasePath, FString RelPath);
+#endif
 
 namespace MIO
 {
@@ -76,12 +85,40 @@ GENERICSTORAGES_API void CloseLockHandle(void* InHandle)
 		mio::CloseLockHandle(InHandle);
 }
 
-FMappedBuffer::FMappedBuffer(FGuid InId, uint32 InCapacity)
+FString ConvertToAbsolutePath(FString InPath)
+{
+#if PLATFORM_IOS
+	InPath = IFileManager::Get().ConvertToAbsolutePathForExternalAppForWrite(*InPath);
+#elif PLATFORM_ANDROID
+	InPath = AndroidRelativeToAbsolutePath(false, InPath);
+#elif PLATFORM_WINDOWS
+#else
+#endif
+	InPath = FPaths::ConvertRelativePathToFull(InPath);
+	return InPath;
+}
+
+const FString& FullProjectSavedDir()
+{
+	static FString FullSavedDirPath = [] {
+#if UE_BUILD_SHIPPING
+		FString ProjSavedDir = FPaths::ProjectDir() / TEXT("Saved/");
+#else
+		FString ProjSavedDir = FPaths::ProjectSavedDir();
+#endif
+		return ConvertToAbsolutePath(ProjSavedDir);
+	}();
+	return FullSavedDirPath;
+}
+
+FMappedBuffer::FMappedBuffer(FGuid InId, uint32 InCapacity, const TCHAR* SubDir)
 	: ReadIdx(0)
 	, WriteIdx(0)
 {
 	auto RegionSize = FMath::RoundUpToPowerOfTwo(FMath::Max(PLATFORM_IOS ? 4096u * 4 : 4096u, InCapacity));
-	Region = MIO::OpenMappedWrite(*FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("Mapped"), InId.IsValid() ? InId.ToString() : FGuid::NewGuid().ToString()), 0, RegionSize);
+	FString SaveDir = FPaths::Combine(FullProjectSavedDir(), SubDir ? SubDir : TEXT("Mapped"));
+	FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*SaveDir);
+	Region = MIO::OpenMappedWrite(*FPaths::Combine(SaveDir, InId.IsValid() ? InId.ToString() : FGuid::NewGuid().ToString()), 0, RegionSize);
 }
 
 bool FMappedBuffer::IsValid() const
@@ -94,36 +131,50 @@ bool FMappedBuffer::WillWrap(uint32 InSize) const
 	return ensure(InSize < GetRegionSize()) && (WriteIdx + InSize >= GetRegionSize());
 }
 
-bool FMappedBuffer::WillFull(uint32 InSize) const
+bool FMappedBuffer::WillFull(uint32 InSize, bool bContinuous) const
 {
-	return ensure(InSize < GetRegionSize()) && (Num() + InSize < GetRegionSize());
+	return (!ensure(InSize < GetRegionSize())) || (Num() + InSize < GetRegionSize()) || (bContinuous && InSize >= ReadIdx);
 }
 
-bool FMappedBuffer::Write(const void* InVal, uint32 InSize, bool bContinuous)
+uint8* FMappedBuffer::Write(const void* InVal, uint32 InSize, bool bContinuous)
 {
-	bool bTestFull = WillFull(InSize);
+	if (!ensure(GetRegionSize() > 0))
+		return nullptr;
+
+	bool bTestFull = WillFull(InSize, bContinuous);
+	auto AddrToWrite = &GetBuffer(WriteIdx);
 	if (!WillWrap(InSize))
 	{
-		FMemory::Memcpy(&GetBuffer(WriteIdx), InVal, InSize);
+		if (InVal)
+		{
+			FMemory::Memcpy(AddrToWrite, InVal, InSize);
+		}
 		WriteIdx += InSize;
 	}
 	else if (bContinuous)
 	{
-		FMemory::Memcpy(&GetBuffer(WriteIdx), InVal, GetRegionSize() - WriteIdx);
-		WriteIdx += InSize - (GetRegionSize() - WriteIdx);
+		AddrToWrite = &GetBuffer(0);
+		WriteIdx = InSize % GetRegionSize() + 1;
+		if (InVal)
+		{
+			FMemory::Memcpy(AddrToWrite, InVal, WriteIdx - 1);
+		}
 	}
 	else
 	{
 		auto FirstPart = GetRegionSize() - WriteIdx;
 		auto LeftSize = InSize - FirstPart;
-		FMemory::Memcpy(&GetBuffer(WriteIdx), InVal, FirstPart);
-		FMemory::Memcpy(&GetBuffer(0), (uint8*)InVal + FirstPart, LeftSize);
+		if (InVal)
+		{
+			FMemory::Memcpy(AddrToWrite, InVal, FirstPart);
+			FMemory::Memcpy(&GetBuffer(0), (uint8*)InVal + FirstPart, LeftSize);
+		}
 		WriteIdx = LeftSize;
 	}
 
 	if (bTestFull)
-		ReadIdx = (WriteIdx + 1) % Capacity();
-	return true;
+		ReadIdx = (WriteIdx + 1) % GetRegionSize();
+	return AddrToWrite;
 }
 
 uint32 FMappedBuffer::ReadUntil(uint8 TestChar, TFunctionRef<void(uint8)> Op)
@@ -183,7 +234,7 @@ uint8& FMappedBuffer::GetBuffer(int32 Idx) const
 
 uint32 FMappedBuffer::GetRegionSize() const
 {
-	return Region ? Region->GetMappedSize() : 0;
+	return Region ? Region->GetMappedSize() : 0u;
 }
 
 uint8* FMappedBuffer::GetPtr() const

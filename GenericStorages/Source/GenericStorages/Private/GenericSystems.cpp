@@ -451,7 +451,7 @@ void AGenericSystemBase::RegisterToWorld(ESystemSource Src)
 	}
 
 	auto Last = UGenericSingletons::RegisterAsSingletonImpl(this, this, false);
-	if (Last && !Last->GetClass()->HasAnyClassFlags(CLASS_NewerVersionExists) && ensureMsgf(Last != this, TEXT("Register Twice")))
+	if (Last && !Last->GetClass()->HasAnyClassFlags(CLASS_NewerVersionExists) && (Last != this))
 	{
 		FString DebugMsg = FString::Printf(TEXT("System Conflict:%s<->%s"), *GetNameSafe(Last), *GetName());
 #if WITH_EDITOR

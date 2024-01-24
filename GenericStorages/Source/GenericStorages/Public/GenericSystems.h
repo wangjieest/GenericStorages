@@ -39,7 +39,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "SystemDependcy")
 	TSubclassOf<UActorComponent> DeferredComponent;
 
-	UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "SystemDependcy", meta = (Bitmask, BitmaskEnum = "EDeferredFlag"))
+	UPROPERTY(EditAnywhere, AdvancedDisplay, Category = "SystemDependcy", meta = (Bitmask, BitmaskEnum = "/Script/GenericStorages.EDeferredFlag"))
 	uint8 DeferredFlag = 0x3;
 
 	bool operator==(const FSystemDeferredCompoent& Other) const { return ActorClass == Other.ActorClass && DeferredComponent == Other.DeferredComponent; }

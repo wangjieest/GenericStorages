@@ -133,7 +133,7 @@ UObject* CreateInstanceImpl(const UObject* WorldContextObject, const FObjConstru
 #endif
 			UGameInstance* Instance = World->GetGameInstance();
 			ULevel* Level = (ULevel*)Cast<ULevel>(WorldContextObject);
-			Level = Level ? Level : World->PersistentLevel;
+			Level = Level ? Level : ToRawPtr(World->PersistentLevel);
 			if (!bNameNone)
 			{
 				Ptr = StaticFindObjectFast(Class, Level, Parameter.Name);
@@ -270,6 +270,23 @@ UObject* CreateInstanceImpl(const UObject* WorldContextObject, UClass* InClass)
 }  // namespace WorldLocalStorages
 
 //////////////////////////////////////////////////////////////////////////
+#if WITH_EDITOR
+UWorld* UGenericLocalStoreEditor::GetEditorWorld(bool bEnsureIsGWorld)
+{
+	if (GEditor)
+	{
+		for (auto& Ctx : GEditor->GetWorldContexts())
+		{
+			if (Ctx.WorldType == EWorldType::Editor)
+			{
+				ensure(!bEnsureIsGWorld || Ctx.World() == GWorld);
+				return Ctx.World();
+			}
+		}
+	}
+	return nullptr;
+}
+#endif
 
 UWorld* UGenericLocalStore::GetGameWorldChecked()
 {
@@ -317,7 +334,7 @@ void UGenericLocalStore::BindObjectReference(UObject* InCtx, UObject* Obj)
 		if (auto Ctx = GEngine->GetWorldContextFromWorld(World))
 		{
 			static FName ObjName = FName("__GS_Referencers__");
-			UObjectReferencer** ReferencerPtr = Ctx->ObjectReferencers.FindByPredicate([](class UObjectReferencer* Obj) { return Obj && (Obj->GetFName() == ObjName); });
+			auto ReferencerPtr = Ctx->ObjectReferencers.FindByPredicate([](class UObjectReferencer* Obj) { return Obj && (Obj->GetFName() == ObjName); });
 			if (ReferencerPtr)
 			{
 				(*ReferencerPtr)->ReferencedObjects.AddUnique(Obj);
@@ -561,11 +578,20 @@ static FDelayedAutoRegisterHelper DelayInnerInitUGMPRpcProxy(EDelayedRegisterRun
 		World->PerModuleDataObjects.Remove(nullptr);
 	});
 #if WITH_EDITOR && WITH_XCREATOR
+#if UE_5_00_OR_LATER
+	FEditorDelegates::PreSaveWorldWithContext.AddLambda([](UWorld* World, FObjectPreSaveContext) {
+		// World->ExtraReferencedObjects.Remove(nullptr);
+		World->ExtraReferencedObjects.RemoveAll([](UObject* Obj) { return !Obj || Obj->GetClass()->HasAnyFlags(RF_Transient); });
+		World->PerModuleDataObjects.Remove(nullptr);
+	});
+#else
 	FEditorDelegates::PreSaveWorld.AddLambda([](uint32 SaveFlags, UWorld* World) {
 		// World->ExtraReferencedObjects.Remove(nullptr);
 		World->ExtraReferencedObjects.RemoveAll([](UObject* Obj) { return !Obj || Obj->GetClass()->HasAnyFlags(RF_Transient); });
 		World->PerModuleDataObjects.Remove(nullptr);
 	});
+
+#endif
 #endif
 	// 	FWorldDelegates::OnPreWorldInitialization.AddLambda([](UWorld* Wrold, const UWorld::InitializationValues IVS) { GetManager(Wrold); });
 });
@@ -584,7 +610,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 	// skip cook and CDOs without world
 	if (IsGarbageCollecting() || IsRunningCommandlet() || (!World && Object->HasAnyFlags(RF_ClassDefaultObject)))
 	{
-		UE_LOG(LogGenericStorages, Warning, TEXT("UGenericSingletons::RegisterAsSingleton Warning : %s"), *GetPathNameSafe(Object));
+		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::RegisterAsSingleton Warning : %s"), *GetPathNameSafe(Object));
 		return nullptr;
 	}
 	auto Mgr = GenericStorages::GetSingletonsManager(World);
@@ -598,7 +624,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 #if !UE_BUILD_SHIPPING
 		UE_LOG(LogGenericStorages,
 			   Verbose,
-			   TEXT("UGenericSingletons::RegisterAsSingleton %s %s(%p) -> %s(%p) -> %s(%p)"),
+			   TEXT("GenericSingletons::RegisterAsSingleton %s %s(%p) -> %s(%p) -> %s(%p)"),
 			   bExisted ? TEXT("Existed") : TEXT("ReplaceSingle"),
 			   *GetTypedNameSafe(World),
 			   World,
@@ -610,8 +636,9 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 		return Ref;
 	}
 
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterReplacing  %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
+
 	UObject* LastPtr = nullptr;
-	UE_LOG(LogGenericStorages, Log, TEXT("UGenericSingletons::RegisterAsSingleton ReplaceMulti %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
 	for (auto CurClass = ObjCls; CurClass; CurClass = CurClass->GetSuperClass())
 	{
 		UObject*& RefPtr = Mgr->Singletons.FindOrAdd(CurClass);
@@ -623,7 +650,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 		{
 			RefPtr = Object;
 #if !UE_BUILD_SHIPPING
-			UE_LOG(LogGenericStorages, Display, TEXT("UGenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(CurClass), CurClass, *GetTypedNameSafe(RefPtr), RefPtr);
+			UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(CurClass), CurClass, *GetTypedNameSafe(RefPtr), RefPtr);
 #endif
 		}
 
@@ -646,11 +673,11 @@ bool UGenericSingletons::UnregisterSingletonImpl(UObject* Object, const UObject*
 	// skip cook and CDOs without world
 	if (IsGarbageCollecting() || IsRunningCommandlet() || (!World && Object->HasAnyFlags(RF_ClassDefaultObject)))
 	{
-		UE_LOG(LogGenericStorages, Warning, TEXT("UGenericSingletons::UnregisterSingleton Warning : %s"), *GetPathNameSafe(Object));
+		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::UnregisterSingleton Warning : %s"), *GetPathNameSafe(Object));
 		return false;
 	}
 
-	UE_LOG(LogGenericStorages, Log, TEXT("UGenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
 
 	auto Mgr = GenericStorages::GetSingletonsManager(World);
 	auto ObjectClass = Object->GetClass();
@@ -720,7 +747,7 @@ UObject* UGenericSingletons::GetSingletonInternal(UClass* SubClass, const UObjec
 		UObject* Ctx = World;
 		Ptr = GenericStorages::CreateSingletonImpl(WorldContextObject, SubClass, Ctx);
 #if !UE_BUILD_SHIPPING
-		UE_LOG(LogGenericStorages, Display, TEXT("UGenericSingletons::NewSingleton %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(SubClass), SubClass, *GetTypedNameSafe(Ptr), Ptr);
+		UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateNewSingleton  %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(SubClass), SubClass, *GetTypedNameSafe(Ptr), Ptr);
 #endif
 		if (ensureAlways(IsValid(Ptr)))
 		{
@@ -749,7 +776,7 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 
 #if !UE_BUILD_SHIPPING
 	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
-	UE_LOG(LogGenericStorages, Display, TEXT("UGenericSingletons::CreateInstanceImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Parameter.Class), Parameter.Class, *GetTypedNameSafe(Ptr), Ptr);
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateInstanceImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Parameter.Class), Parameter.Class, *GetTypedNameSafe(Ptr), Ptr);
 #endif
 	return Ptr;
 }
@@ -768,7 +795,7 @@ TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const FSoftOb
 #if !UE_BUILD_SHIPPING
 										  ,
 										  false,
-										  FString::Printf(TEXT("UGenericSingletons::AsyncLoad [%s]"), *SoftPath.ToString())
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoad [%s]"), *SoftPath.ToString())
 #endif
 	);
 }
@@ -793,7 +820,7 @@ TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const TArray<
 #if !UE_BUILD_SHIPPING
 										  ,
 										  false,
-										  FString::Printf(TEXT("UGenericSingletons::AsyncLoads [%s]"), *FString::JoinBy(InPaths, TEXT(","), [](const FSoftObjectPath& SoftPath) { return SoftPath.ToString(); }))
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoads [%s]"), *FString::JoinBy(InPaths, TEXT(","), [](const FSoftObjectPath& SoftPath) { return SoftPath.ToString(); }))
 #endif
 	);
 }

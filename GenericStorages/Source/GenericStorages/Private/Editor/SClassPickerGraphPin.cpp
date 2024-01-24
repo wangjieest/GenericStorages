@@ -5,26 +5,22 @@
 #if WITH_EDITOR
 #include "Slate.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "ClassViewerFilter.h"
 #include "ClassViewerModule.h"
+#include "ContentBrowserModule.h"
 #include "EdGraph/EdGraphSchema.h"
 #include "EdGraphSchema_K2.h"
 #include "EdGraphUtilities.h"
 #include "Editor.h"
+#include "Engine/Selection.h"
+#include "IContentBrowserSingleton.h"
 #include "K2Node_CallFunction.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
 #include "UObject/Object.h"
-#if UE_5_01_OR_LATER
-#include "AssetRegistry/AssetRegistryModule.h"
-#else
-#include "AssetRegistryModule.h"
-#endif
-#include "ContentBrowserModule.h"
-#include "IContentBrowserSingleton.h"
-#include "Engine/Selection.h"
 #define LOCTEXT_NAMESPACE "ClassPikcerGraphPin"
 
 bool SGraphPinObjectExtra::HasCustomMeta(UEdGraphPin* InGraphPinObj, const TCHAR* MetaName, TSet<FString>* Out)
@@ -400,11 +396,27 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 	Options.Mode = EClassViewerMode::ClassPicker;
 	Options.bShowNoneOption = true;
 
+	const UClass* InterfaceMustBeImplemented = nullptr;
+	TSet<const UClass*> AllowedClasses;
+	TSet<const UClass*> DisallowedClasses;
+	bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp);
+	if (!AllowedClasses.Num())
+	{
+		AllowedClasses.Add(UObject::StaticClass());
+	}
+
+	TSharedPtr<FSoftclassPathSelectorFilter> Filter = MakeShareable(new FSoftclassPathSelectorFilter);
 #if UE_5_00_OR_LATER
-	Options.ClassFilters.Add(ClassFilter.ToSharedRef());
+	Options.ClassFilters.Add(Filter.ToSharedRef());
 #else
-	Options.ClassFilter = ClassFilter;
+	Options.ClassFilter = Filter;
 #endif
+
+	Filter->bAllowAbstract = bAllowAbstract;
+	Filter->InterfaceThatMustBeImplemented = InterfaceMustBeImplemented;
+	Filter->AllowedChildrenOfClasses.Append(MoveTemp(AllowedClasses));
+	Filter->DisallowedChildrenOfClasses.Append(MoveTemp(DisallowedClasses));
+	Filter->GraphPinOutermostPackage = GraphPinObj->GetOuter()->GetOutermost();
 
 	return SNew(SBox)
 			.WidthOverride(280)
@@ -416,7 +428,7 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 				[
 					SNew(SBorder)
 					.Padding(4)
-					.BorderImage(FEditorStyle::GetBrush("ToolPanel.GroupBorder"))
+					.BorderImage(FAppStyle::GetBrush("ToolPanel.GroupBorder"))
 					[
 						ClassViewerModule.CreateClassViewer(Options, FOnClassPicked::CreateSP(this, &SClassPickerGraphPin::OnPickedNewClass))
 					]
@@ -468,7 +480,11 @@ const FAssetData& SClassPickerGraphPin::GetAssetData(bool bRuntimePath) const
 		return SGraphPinObject::GetAssetData(bRuntimePath);
 	}
 
+#if UE_5_00_OR_LATER
+	FString CachedRuntimePath = CachedEditorAssetData.GetObjectPathString() + TEXT("_C");
+#else
 	FString CachedRuntimePath = CachedEditorAssetData.ObjectPath.ToString() + TEXT("_C");
+#endif
 
 	if (GraphPinObj->DefaultObject)
 	{
@@ -485,17 +501,23 @@ const FAssetData& SClassPickerGraphPin::GetAssetData(bool bRuntimePath) const
 			FString EditorPath = GraphPinObj->DefaultValue;
 			EditorPath.RemoveFromEnd(TEXT("_C"));
 			const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-
+#if UE_5_00_OR_LATER
+			CachedEditorAssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FSoftObjectPath(EditorPath));
+#else
 			CachedEditorAssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FName(*EditorPath));
-
+#endif
 			if (!CachedEditorAssetData.IsValid())
 			{
 				FString PackageName = FPackageName::ObjectPathToPackageName(EditorPath);
 				FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
 				FString ObjectName = FPackageName::ObjectPathToObjectName(EditorPath);
 
-				// Fake one
+// Fake one
+#if UE_5_00_OR_LATER
+				CachedEditorAssetData = FAssetData(FName(*PackageName), FName(*PackagePath), FName(*ObjectName), FTopLevelAssetPath(UObject::StaticClass()));
+#else
 				CachedEditorAssetData = FAssetData(FName(*PackageName), FName(*PackagePath), FName(*ObjectName), UObject::StaticClass()->GetFName());
+#endif
 			}
 		}
 	}
@@ -665,7 +687,11 @@ TSharedRef<SWidget> SDataTableFilterGraphPin::GenerateAssetPicker()
 
 	FAssetPickerConfig AssetPickerConfig;
 	AssetPickerConfig.bAllowDragging = false;
+#if UE_5_00_OR_LATER
+	AssetPickerConfig.Filter.ClassPaths.Add(FTopLevelAssetPath(TEXT("DataTable")));
+#else
 	AssetPickerConfig.Filter.ClassNames.Add(TEXT("DataTable"));
+#endif
 	AssetPickerConfig.OnAssetSelected = CreateWeakLambda(this, [this](const FAssetData& AssetData) { OnAssetSelectedFromPicker(AssetData); });
 	AssetPickerConfig.OnAssetEnterPressed = CreateWeakLambda(this, [this](const TArray<FAssetData>& SelectedAssets) { OnAssetEnterPressedInPicker(SelectedAssets); });
 	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
@@ -677,7 +703,7 @@ TSharedRef<SWidget> SDataTableFilterGraphPin::GenerateAssetPicker()
 			.WidthOverride(300)
 			[
 				SNew(SBorder)
-				.BorderImage(FEditorStyle::GetBrush("Menu.Background"))
+				.BorderImage(FAppStyle::GetBrush("Menu.Background"))
 				[
 					ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig)
 				]

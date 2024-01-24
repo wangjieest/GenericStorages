@@ -23,11 +23,7 @@
 #include "UObject/UnrealType.h"
 #include "Editor/UnrealEditorUtils.h"
 #include "Widgets/Text/STextBlock.h"
-#if UE_5_01_OR_LATER
 #include "AssetRegistry/AssetRegistryModule.h"
-#else
-#include "AssetRegistryModule.h"
-#endif
 namespace ComponentPicker
 {
 static const FName NameComponent = TEXT("ComponentName");

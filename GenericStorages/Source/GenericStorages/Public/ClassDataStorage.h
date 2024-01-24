@@ -3,7 +3,9 @@
 #pragma once
 #include "CoreMinimal.h"
 
+#include "Misc/CoreDelegates.h"
 #include "GenericStoragesLog.h"
+#include "Misc/CoreDelegates.h"
 
 namespace ClassStorage
 {
@@ -59,6 +61,9 @@ protected:
 	//////////////////////////////////////////////////////////////////////////
 	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class, bool bEnsure, bool* bNewCreated = nullptr)
 	{
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Add %s"), *Class->GetName());
+#endif
 		if (bEnsure && !ensureAlwaysMsgf(bEnableAdd, TEXT("TClassDataStorage cannot add data anymore")))
 			return nullptr;
 
@@ -149,11 +154,10 @@ protected:
 		}
 		return Ptr;
 	}
-
 	void Clean()
 	{
 		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Clean"));
-#if 1
+#if 0
 		FastLookupTable.Reset();
 		RegisteredData.Reset();
 		PersistentData.Reset();
