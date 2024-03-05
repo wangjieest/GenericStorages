@@ -272,7 +272,11 @@ void* FObjectDataRegistry::GetDataPtr(const UObject* Obj, FName Key, const TFunc
 				auto& OnDestroyed = const_cast<AActor*>(Actor)->OnDestroyed;
 				if (OnDestroyed.Contains(Helper, OnActorDestroyedName))
 				{
+#if UE_5_03_OR_LATER
+					TBaseDynamicDelegate<FNotThreadSafeDelegateMode, void, AActor*> Delegate;
+#else
 					TBaseDynamicDelegate<FWeakObjectPtr, void, AActor*> Delegate;
+#endif
 					Delegate.BindUFunction(Helper, OnActorDestroyedName);
 					OnDestroyed.Add(Delegate);
 				}

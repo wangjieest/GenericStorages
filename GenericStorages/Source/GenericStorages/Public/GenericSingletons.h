@@ -23,14 +23,14 @@ GENERICSTORAGES_API bool CallOnPluginReady(FSimpleDelegate Delegate);
 
 GENERICSTORAGES_API void CallOnEngineInitCompletedImpl(FSimpleDelegate& Lambda);
 
-GENERICSTORAGES_API bool DelayExec(const UObject* InObj, FSimpleDelegate InDelegate, float InDelay = 0.f, bool bEnsureExec = true);
+GENERICSTORAGES_API bool DelayExec(const UObject* InObj, FTimerDelegate InDelegate, float InDelay = 0.f, bool bEnsureExec = true);
 
 #if WITH_EDITOR
 GENERICSTORAGES_API void CallOnEditorMapOpendImpl(TDelegate<void(UWorld*)> Delegate);
 #endif
 
 GENERICSTORAGES_API FTimerManager* GetTimerManager(UWorld* InWorld);
-GENERICSTORAGES_API FTimerHandle SetTimer(UWorld* InWorld, FSimpleDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay = -1.f);
+GENERICSTORAGES_API FTimerHandle SetTimer(UWorld* InWorld, FTimerDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay = -1.f);
 GENERICSTORAGES_API UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class);
 }  // namespace GenericStorages
 
@@ -62,9 +62,9 @@ template<typename F>
 auto DelayExec(const UObject* InObj, F&& Lambda, float InDelay = 0.f, bool bEnsureExec = true)
 {
 	if (InObj)
-		return GenericStorages::DelayExec(InObj, FSimpleDelegate::CreateWeakLambda(const_cast<UObject*>(InObj), Forward<F>(Lambda)), InDelay, bEnsureExec);
+		return GenericStorages::DelayExec(InObj, FTimerDelegate::CreateWeakLambda(const_cast<UObject*>(InObj), Forward<F>(Lambda)), InDelay, bEnsureExec);
 	else
-		return GenericStorages::DelayExec(InObj, FSimpleDelegate::CreateLambda(Forward<F>(Lambda)), InDelay, bEnsureExec);
+		return GenericStorages::DelayExec(InObj, FTimerDelegate::CreateLambda(Forward<F>(Lambda)), InDelay, bEnsureExec);
 }
 
 template<typename F>

@@ -53,7 +53,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 			return World;
 		};
 
-		FWorldContext* WorldContext = GEngine->GetWorldContextFromPIEInstance(FMath::Max(0, GPlayInEditorID));
+		FWorldContext* WorldContext = GEngine->GetWorldContextFromPIEInstance(FMath::Max(0, (int32)GPlayInEditorID));
 		if (WorldContext && ensure(WorldContext->WorldType == EWorldType::PIE /* || WorldContext->WorldType == EWorldType::Game*/))
 		{
 			World = WorldContext->World();
@@ -242,7 +242,7 @@ FTimerManager* GetTimerManager(UWorld* InWorld)
 	}
 }
 
-FTimerHandle SetTimer(UWorld* InWorld, FSimpleDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay /*= -1.f*/)
+FTimerHandle SetTimer(UWorld* InWorld, FTimerDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay /*= -1.f*/)
 {
 	FTimerHandle TimerHandle;
 	auto TimerMgr = GetTimerManager(InWorld);
@@ -577,7 +577,7 @@ static FDelayedAutoRegisterHelper DelayInnerInitUGMPRpcProxy(EDelayedRegisterRun
 		World->ExtraReferencedObjects.Remove(nullptr);
 		World->PerModuleDataObjects.Remove(nullptr);
 	});
-#if WITH_EDITOR && WITH_XCREATOR
+#if WITH_EDITOR && defined(WITH_XCREATOR) && WITH_XCREATOR
 #if UE_5_00_OR_LATER
 	FEditorDelegates::PreSaveWorldWithContext.AddLambda([](UWorld* World, FObjectPreSaveContext) {
 		// World->ExtraReferencedObjects.Remove(nullptr);

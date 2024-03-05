@@ -70,7 +70,7 @@ static FDelayedAutoRegisterHelper DelayOnEngineInitCompleted(EDelayedRegisterRun
 	OnFEngineLoopInitCompleted.Clear();
 });
 
-bool DelayExec(const UObject* InObj, FSimpleDelegate Delegate, float InDelay, bool bEnsureExec)
+bool DelayExec(const UObject* InObj, FTimerDelegate Delegate, float InDelay, bool bEnsureExec)
 {
 	InDelay = FMath::Max(InDelay, 0.00001f);
 	auto World = GEngine->GetWorldFromContextObject(InObj, InObj ? EGetWorldErrorMode::LogAndReturnNull : EGetWorldErrorMode::ReturnNull);

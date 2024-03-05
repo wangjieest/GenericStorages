@@ -28,13 +28,13 @@ T* ToRawPtr(T* Ptr)
 {
 	return Ptr;
 }
-template<typename T>
-auto ToRawPtr(const TSharedPtr<T>& Ptr)
+template<typename T, ESPMode Mode>
+auto ToRawPtr(const TSharedPtr<T, Mode>& Ptr)
 {
 	return Ptr.Get();
 }
-template<typename T>
-auto ToRawPtr(const TSharedRef<T>& Ptr)
+template<typename T, ESPMode Mode>
+auto ToRawPtr(const TSharedRef<T, Mode>& Ptr)
 {
 	return &Ptr.Get();
 }

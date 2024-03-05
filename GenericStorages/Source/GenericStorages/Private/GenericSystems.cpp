@@ -397,28 +397,28 @@ void AGenericSystemBase::RegisterToWorld(ESystemSource Src)
 
 	static WorldLocalStorages::TGenericWorldLocalStorage<FTimerHandle> TimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(TimerHandle.GetLocalValue(GetWorld()),
-										   CreateWeakLambda(this,
-															[this] {
-																GenericSystems::EditorSetActorLabelName(this, GetClass()->GetName());
-																if (auto SysMgr = GIsEditor ? AGenericSystemMgr::Get(GetLevel()) : (AGenericSystemMgr*)nullptr)
-																{
-																	AttachToActor(SysMgr, FAttachmentTransformRules::KeepRelativeTransform);
-																	SysMgr->AddSystemInstance(this);
-																	GenericSystems::EditorSetActorFolderPath(this, SysMgr->GetFolderPath());
-																	if (GEngine)
-																	{
-																		GEngine->OnLevelActorFolderChanged().Add(CreateWeakLambda(this, [this](const AActor* Actor, FName OldName) {
-																			if (auto Mgr = AGenericSystemMgr::Get(GetLevel()))
-																				GenericSystems::EditorSetActorFolderPath(this, Mgr->GetFolderPath());
-																		}));
-																	}
-																	SysMgr->Modify();
-																}
-																else
-																{
-																	GenericSystems::EditorSetActorFolderPath(this);
-																}
-															}),
+										   FTimerDelegate::CreateWeakLambda(this,
+																			[this] {
+																				GenericSystems::EditorSetActorLabelName(this, GetClass()->GetName());
+																				if (auto SysMgr = GIsEditor ? AGenericSystemMgr::Get(GetLevel()) : (AGenericSystemMgr*)nullptr)
+																				{
+																					AttachToActor(SysMgr, FAttachmentTransformRules::KeepRelativeTransform);
+																					SysMgr->AddSystemInstance(this);
+																					GenericSystems::EditorSetActorFolderPath(this, SysMgr->GetFolderPath());
+																					if (GEngine)
+																					{
+																						GEngine->OnLevelActorFolderChanged().Add(CreateWeakLambda(this, [this](const AActor* Actor, FName OldName) {
+																							if (auto Mgr = AGenericSystemMgr::Get(GetLevel()))
+																								GenericSystems::EditorSetActorFolderPath(this, Mgr->GetFolderPath());
+																						}));
+																					}
+																					SysMgr->Modify();
+																				}
+																				else
+																				{
+																					GenericSystems::EditorSetActorFolderPath(this);
+																				}
+																			}),
 										   0.1f,
 										   false);
 
