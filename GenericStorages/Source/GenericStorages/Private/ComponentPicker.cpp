@@ -8,7 +8,7 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "GameFramework/Actor.h"
 #include "UObject/UnrealType.h"
-#include "UnrealCompatibility.h"
+#include "Template/UnrealCompatibility.h"
 
 UActorComponent* FComponentPicker::FindComponentByName(AActor* InActor) const
 {

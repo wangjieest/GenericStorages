@@ -9,7 +9,7 @@
 #include "Misc/CoreDelegates.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/Class.h"
-#include "UnrealCompatibility.h"
+#include "Template/UnrealCompatibility.h"
 
 #include "GenericSingletons.generated.h"
 
@@ -174,23 +174,23 @@ public:
 	UGenericSingletons();
 
 protected:
-	static UObject* GetSingletonInternal(UClass* Class, const UObject* WorldContextObject, bool bCreate, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
-	static UObject* RegisterAsSingletonInternal(UObject* Object, const UObject* WorldContextObject, bool bReplaceExist = true, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
+	static UObject* GetSingletonInternal(UClass* Class, const UObject* Ctx, bool bCreate, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
+	static UObject* RegisterAsSingletonInternal(UObject* Object, const UObject* Ctx, bool bReplaceExist = true, UClass* BaseNativeCls = nullptr, UClass* BaseBPCls = nullptr);
 
-	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "RegisterAsSingleton", WorldContext = "WorldContextObject"))
-	static bool K2_RegisterAsSingleton(UObject* Object, const UObject* WorldContextObject = nullptr, bool bReplaceExist = true)
+	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "RegisterAsSingleton", WorldContext = "Ctx"))
+	static bool K2_RegisterAsSingleton(UObject* Object, const UObject* Ctx = nullptr, bool bReplaceExist = true)
 	{
-		UObject* Ret = Object ? RegisterAsSingletonInternal(Object, WorldContextObject, bReplaceExist) : nullptr;
+		UObject* Ret = Object ? RegisterAsSingletonInternal(Object, Ctx, bReplaceExist) : nullptr;
 		return (Ret && Ret == Object);
 	}
-	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "UnregisterSingleton", WorldContext = "WorldContextObject"))
-	static bool K2_UnregisterSingleton(UObject* Object, const UObject* WorldContextObject = nullptr) { return Object ? UnregisterSingletonImpl(Object, WorldContextObject) : false; }
+	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "UnregisterSingleton", WorldContext = "Ctx"))
+	static bool K2_UnregisterSingleton(UObject* Object, const UObject* Ctx = nullptr) { return Object ? UnregisterSingletonImpl(Object, Ctx) : false; }
 
-	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingleton", WorldContext = "WorldContextObject", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* K2_GetSingleton(UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true);
+	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingleton", WorldContext = "Ctx", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* K2_GetSingleton(UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingletonEx", WorldContext = "WorldContextObject", AdvancedDisplay = "RegClass,bValid", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* K2_GetSingletonEx(bool& bIsValid, UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
+	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingletonEx", WorldContext = "Ctx", AdvancedDisplay = "RegClass,bValid", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* K2_GetSingletonEx(bool& bIsValid, UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
 	{
 		UObject* Ret = nullptr;
 		do
@@ -199,17 +199,17 @@ protected:
 			if (!ensure(Class && (!RegClass || Class->IsChildOf(RegClass))))
 				break;
 #endif
-			Ret = GetSingletonInternal(Class, WorldContextObject, bCreate, nullptr, RegClass);
+			Ret = GetSingletonInternal(Class, Ctx, bCreate, nullptr, RegClass);
 		} while (false);
 		bIsValid = IsValid(Ret);
 		return Ret;
 	}
 
-	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureGetSingleton", WorldContext = "WorldContextObject", AdvancedDisplay = "RegClass", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* GetSingletonImplPure(UClass* Class, const UObject* WorldContextObject = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
+	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureGetSingleton", WorldContext = "Ctx", AdvancedDisplay = "RegClass", DeterminesOutputType = "Class", DynamicOutputParam))
+	static UObject* GetSingletonImplPure(UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
 	{
 		bool bIsValid = false;
-		return K2_GetSingletonEx(bIsValid, Class, WorldContextObject, bCreate, RegClass);
+		return K2_GetSingletonEx(bIsValid, Class, Ctx, bCreate, RegClass);
 	}
 
 	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", CallableWithoutWorldContext, DeterminesOutputType = "Class", DynamicOutputParam))

@@ -324,9 +324,9 @@ void UGenericLocalStore::BindObjectReference(UObject* InCtx, UObject* Obj)
 		Instance->RegisterReferencedObject(Obj);
 	}
 #if WITH_EDITOR
-	else if (auto CurWorld = Cast<UWorld>(InCtx); CurWorld && CurWorld->IsGameWorld())
+	else if (Cast<UWorld>(InCtx) && Cast<UWorld>(InCtx)->IsGameWorld())
 	{
-		CurWorld->PerModuleDataObjects.AddUnique(Obj);
+		Cast<UWorld>(InCtx)->PerModuleDataObjects.AddUnique(Obj);
 	}
 	else if (UWorld* World = InCtx->GetWorld())
 	{
@@ -577,7 +577,7 @@ static FDelayedAutoRegisterHelper DelayInnerInitUGMPRpcProxy(EDelayedRegisterRun
 		World->ExtraReferencedObjects.Remove(nullptr);
 		World->PerModuleDataObjects.Remove(nullptr);
 	});
-#if WITH_EDITOR && defined(WITH_XCREATOR) && WITH_XCREATOR
+#if WITH_EDITOR
 #if UE_5_00_OR_LATER
 	FEditorDelegates::PreSaveWorldWithContext.AddLambda([](UWorld* World, FObjectPreSaveContext) {
 		// World->ExtraReferencedObjects.Remove(nullptr);

@@ -11,6 +11,7 @@ public class GenericStorages : ModuleRules
 		PublicIncludePaths.AddRange(new string[]{
 			ModuleDirectory + "/Public",
 			ModuleDirectory + "/Template",
+            ModuleDirectory,
 			// ... add public include paths required here ...
 		});
 

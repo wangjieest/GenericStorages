@@ -4,6 +4,8 @@
 
 #include "Math/NumericLimits.h"
 #include "Templates/UniquePtr.h"
+#include "Templates/Function.h"
+#include "Containers/ContainersFwd.h"
 
 namespace MIO
 {
@@ -23,6 +25,8 @@ GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<uint8>> OpenMappedWrite(const T
 GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<const uint8>> OpenMappedRead(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = 0, bool bPreloadHint = false);
 GENERICSTORAGES_API bool ChunkingFile(const TCHAR* Filename, TArray64<uint8>& Buffer, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda);
 GENERICSTORAGES_API FString ConvertToAbsolutePath(FString InOutPath);
+GENERICSTORAGES_API int32 ReadLines(const TCHAR* Filename, const TFunctionRef<void(const TArray<uint8>&)>& Lambda, char Dim = '\n');
+GENERICSTORAGES_API int32 WriteLines(const TCHAR* Filename, const TArray<TArray<uint8>>& Lines, char Dim = '\n');
 
 inline bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda, int32 InSize = 2048)
 {
@@ -53,7 +57,7 @@ public:
 		{
 			Index = Capacity() - 1;
 		}
-		return GetBuffer((ReadIdx + Index) % Capacity());
+		return GetBuffer((ReadIdx + Index) % (Capacity() > 0 ? Capacity() : 1));
 	}
 	FORCEINLINE const uint8& operator[](uint32 Index) const { return Peek(Index); }
 

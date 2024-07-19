@@ -31,6 +31,7 @@ class GENERICSTORAGES_API SClassPickerGraphPin : public SGraphPinObjectExtra
 {
 public:
 	SLATE_BEGIN_ARGS(SClassPickerGraphPin) {}
+	SLATE_ARGUMENT_DEFAULT(bool, bRequiredMatch){true};
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, UEdGraphPin* InGraphPinObj, FProperty* InBindProp = nullptr);
@@ -58,6 +59,7 @@ protected:
 	FProperty* BindProp = nullptr;
 	TOptional<bool> bNotConnectable;
 	TSharedPtr<class IClassViewerFilter> ClassFilter;
+	bool bRequiredMatch = true;
 };
 
 // CustomObjectPinPicker with [MetaClass, NotConnectable RequrieConnection]

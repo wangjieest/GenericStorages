@@ -2,6 +2,8 @@
 
 #include "SClassPickerGraphPin.h"
 
+#include "Engine/DataTable.h"
+
 #if WITH_EDITOR
 #include "Slate.h"
 
@@ -21,6 +23,13 @@
 #include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
 #include "UObject/Object.h"
+#include"Misc/EngineVersionComparison.h"
+#if UE_VERSION_NEWER_THAN(5, 1, -1)
+#include "Styling/AppStyle.h"
+#else
+#define FAppStyle FEditorStyle
+#endif
+
 #define LOCTEXT_NAMESPACE "ClassPikcerGraphPin"
 
 bool SGraphPinObjectExtra::HasCustomMeta(UEdGraphPin* InGraphPinObj, const TCHAR* MetaName, TSet<FString>* Out)
@@ -277,7 +286,7 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 		if (!InGraphPinObj)
 			break;
 
-		if (!ensure(IsMatchedToCreate(InGraphPinObj)))
+		if (!ensure(!bRequiredMatch || IsMatchedToCreate(InGraphPinObj)))
 			break;
 
 		if (InGraphPinObj->GetDefaultAsString().IsEmpty())
@@ -341,6 +350,7 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 
 void SClassPickerGraphPin::Construct(const FArguments& InArgs, UEdGraphPin* InGraphPinObj, FProperty* InBindProp)
 {
+	bRequiredMatch = InArgs._bRequiredMatch;
 	BindProp = InBindProp;
 	auto Default = SGraphPin::FArguments();
 	SGraphPin::Construct(Default, InGraphPinObj);

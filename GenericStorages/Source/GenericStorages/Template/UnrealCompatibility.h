@@ -11,6 +11,10 @@
 
 #define UE_VERSION_OR_LATER(MAJOR, MINOR) (ENGINE_MAJOR_VERSION > MAJOR || (MAJOR == ENGINE_MAJOR_VERSION && ENGINE_MINOR_VERSION >= MINOR))
 
+#ifndef UE_5_05_OR_LATER
+#define UE_5_05_OR_LATER UE_VERSION_OR_LATER(5, 5)
+#endif
+
 #ifndef UE_5_04_OR_LATER
 #define UE_5_04_OR_LATER UE_VERSION_OR_LATER(5, 4)
 #endif
@@ -29,6 +33,13 @@
 
 #ifndef UE_5_00_OR_LATER
 #define UE_5_00_OR_LATER UE_VERSION_OR_LATER(5, 0)
+#endif
+
+#if UE_5_01_OR_LATER
+#define FGMPStyle FAppStyle
+#else
+#define FGMPStyle FEditorStyle
+#define FAppStyle FEditorStyle
 #endif
 
 #if UE_5_00_OR_LATER
@@ -84,6 +95,14 @@
 #define UEVer() UE4Ver()
 #define UECodeGen_Private UE4CodeGen_Private
 
+template<typename OutType, typename InType>
+OutType IntCastChecked(InType In)
+{
+	return static_cast<OutType>(In);
+}
+
+#define SLATE_DECLARE_WIDGET(...)
+
 FORCEINLINE bool IsValidChecked(const UObject* Test)
 {
 	check(Test);
@@ -107,6 +126,16 @@ FORCEINLINE T* ToRawPtr(T* Ptr)
 	return Ptr;
 }
 #endif
+
+template<typename T>
+FORCEINLINE T* ToRawPtr(const TWeakObjectPtr<T>& Ptr)
+{
+	return Ptr.Get();
+}
+FORCEINLINE UObject* ToRawPtr(const FWeakObjectPtr& Ptr)
+{
+	return Ptr.Get();
+}
 
 template<typename T>
 auto ToArrayView(T& t)
@@ -483,11 +512,6 @@ using ULevelStreamingDynamic = ULevelStreamingKismet;
 #include "Engine/LevelStreamingDynamic.h"
 #endif
 
-#if !UE_5_03_OR_LATER
-using FUnsizedIntProperty = UETypes_Private::TIntegerPropertyMapping<signed int>::Type;
-using FUnsizedUIntProperty = UETypes_Private::TIntegerPropertyMapping<unsigned int>::Type;
-#endif
-
 #if !UE_4_23_OR_LATER
 #define DISABLE_REPLICATED_PROPERTY(c, v)
 #endif
@@ -507,6 +531,11 @@ FORCEINLINE bool IsEngineExitRequested()
 #else
 #include "UObject/FieldPath.h"
 using FFieldPropertyType = FProperty;
+
+#if !UE_5_03_OR_LATER
+using FUnsizedIntProperty = UETypes_Private::TIntegerPropertyMapping<signed int>::Type;
+using FUnsizedUIntProperty = UETypes_Private::TIntegerPropertyMapping<unsigned int>::Type;
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 FORCEINLINE EClassCastFlags GetPropertyCastFlags(const FProperty* Prop)
@@ -694,7 +723,7 @@ inline auto CreateWeakLambda(const UObject* InUserObject, LambdaType&& InFunctor
 
 namespace UnrealCompatibility
 {
-#define GMP_EXIST_SPLAMBDA_DELEGATE UE_5_03_OR_LATER
+#define GMP_EXIST_SPLAMBDA_DELEGATE (UE_5_03_OR_LATER)
 #if !GMP_EXIST_SPLAMBDA_DELEGATE
 template<class UserClass, ESPMode SPMode, typename FuncType Z_TYPENAME_USER_POLICY_DECLARE, typename FunctorType, typename... VarTypes>
 class TBaseSPLambdaDelegateInstance;
@@ -856,7 +885,7 @@ inline auto CreateWeakLambda(const UserClass* InUserObject, LambdaType&& InFunct
 {
 	using namespace UnrealCompatibility;
 	using DetectType = TFunctionTraits<std::remove_reference_t<LambdaType>>;
-#if UE_5_03_OR_LATER
+#if UE_5_02_OR_LATER
 	return TDelegate<typename DetectType::TFuncType>::CreateWeakLambda(const_cast<UObject*>(static_cast<const UObject*>(InUserObject)), Forward<LambdaType>(InFunctor), InputPayload...);
 #else
 	using FWeakBaseFunctorDelegateInstance = TWeakBaseFunctorDelegateInstance<UObject, typename DetectType::TFuncType Z_TYPENAME_USER_POLICY_IMPL, std::remove_reference_t<LambdaType>, PayloadTypes...>;
