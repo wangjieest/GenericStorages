@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #include "CoreMinimal.h"
@@ -31,7 +31,7 @@ template<>
 struct TContextPolicy<UWorld>
 {
 	using CtxType = UWorld;
-	static UWorld* GetCtx(const UObject* InCtx) { return InCtx->IsValidLowLevelFast() ? InCtx->GetWorld() : nullptr; }
+	static UWorld* GetCtx(const UObject* InCtx) { return (InCtx && InCtx->IsValidLowLevelFast()) ? InCtx->GetWorld() : nullptr; }
 };
 template<>
 struct TContextPolicy<UGameInstance>

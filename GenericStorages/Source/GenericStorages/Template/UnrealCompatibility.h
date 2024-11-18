@@ -1,4 +1,4 @@
-﻿// Copyright UnrealCompatibility, Inc. All Rights Reserved.
+// Copyright UnrealCompatibility, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -484,7 +484,7 @@ template<typename EnumType>
 UEnum* StaticEnum()
 {
 	static_assert(std::is_enum<EnumType>::value, "err");
-	static UEnum* Ret = ::FindObject<UEnum>(ANY_PACKAGE, ANSI_TO_TCHAR(ITS::TypeStr<EnumType>()), true);
+	static UEnum* Ret = ::FindObject<UEnum>(ANY_PACKAGE_COMPATIABLE, ANSI_TO_TCHAR(ITS::TypeStr<EnumType>()), true);
 	return Ret;
 }
 template<typename ClassType>

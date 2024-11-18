@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -19,7 +19,7 @@ struct GENERICSTORAGES_API FDataTablePicker
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DataTablePicker")
-	UDataTable* DataTable;
+	UDataTable* DataTable = nullptr;
 };
 
 // Table+Row
