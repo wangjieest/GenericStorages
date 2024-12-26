@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #include "GenericSystems.h"
 
@@ -427,7 +427,7 @@ void AGenericSystemBase::RegisterToWorld(ESystemSource Src)
 		return;
 #endif
 
-	if (DeferredComponents.Num() && !ensure(!GetWorld()->bBegunPlay))
+	if (DeferredComponents.Num() && !ensure(!GetWorld()->GetBegunPlay()))
 	{
 #if WITH_EDITOR
 		static WorldLocalStorages::TGenericWorldLocalStorage<bool> StaticHasWarned;

@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 #if WITH_EDITOR
 
 #include "UnrealEditorUtils.h"
@@ -207,28 +207,27 @@ ISettingsModule* GetSettingsModule()
 	return FModuleManager::GetModulePtr<ISettingsModule>("Settings");
 }
 
-bool RegisterSettings(const FName& ContainerName, const FName& CategoryName, const FName& SectionName, const FText& DisplayName, const FText& Description, const TWeakObjectPtr<UObject>& SettingsObject, ISettingsModule* InSettingsModule)
+bool RegisterSettings(const FName& ContainerName, const FName& CategoryName, const FName& SectionName, const FText& DisplayText, const FText& Description, const TWeakObjectPtr<UObject>& SettingsObject, ISettingsModule* InSettingsModule)
 {
 	InSettingsModule = InSettingsModule ? InSettingsModule : FModuleManager::GetModulePtr<ISettingsModule>("Settings");
 	if (InSettingsModule && SettingsObject.IsValid())
 	{
-		InSettingsModule->RegisterSettings(ContainerName, CategoryName, SectionName, DisplayName, Description, SettingsObject);
+		InSettingsModule->RegisterSettings(ContainerName, CategoryName, SectionName, DisplayText, Description, SettingsObject);
 		return true;
 	}
 	return false;
 }
 
-bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
+bool AddConfigurationOnProject(UObject* Obj, const FConfigurationPos& NameCfg, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
 {
 	if (GIsEditor && Obj && (!bOnlyCDO || Obj->HasAnyFlags(RF_ClassDefaultObject)) && (!bOnlyNative || Obj->GetClass()->IsNative()) && (bAllowAbstract || !Obj->GetClass()->HasAllClassFlags(CLASS_Abstract)))
 	{
-		static FName ExtraConfiguration = TEXT("ExtraConfiguration");
-		static TOptional<FName> SessionNameCache;
+		FName ExtraConfiguration = TEXT("ExtraConfiguration");
 		GenericStorages::CallOnPluginReady(FSimpleDelegate::CreateWeakLambda(Obj, [=] {
 			auto Name = Obj->GetName();
 			Name.RemoveFromStart(TEXT("Default__"));
-			FName SectionName = SessionName.IsNone() ? SessionNameCache.Get(*Name) : SessionName;
-			RegisterSettings("Project", ExtraConfiguration, SectionName, FText::FromName(SectionName), FText::GetEmpty(), Obj);
+			FName SectionName = NameCfg.SectionName.IsNone() ? FName(*Name) : NameCfg.SectionName;
+			RegisterSettings(NameCfg.ContainerName, NameCfg.CategoryName, SectionName, FText::FromName(SectionName), FText::GetEmpty(), Obj);
 #if 0
 			for (auto& Pair : TPropertyValueRange<FProperty>(Obj->GetClass(), Obj, EPropertyValueIteratorFlags::NoRecursion, EFieldIteratorFlags::ExcludeDeprecated))
 			{
@@ -731,14 +730,6 @@ FScopedPropertyTransaction::~FScopedPropertyTransaction()
 bool ShouldEndPlayMap()
 {
 	return GEditor && GEditor->ShouldEndPlayMap();
-}
-}  // namespace UnrealEditorUtils
-#else
-namespace UnrealEditorUtils
-{
-bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName, bool bOnlyCDO, bool bOnlyNative, bool bAllowAbstract)
-{
-	return false;
 }
 }  // namespace UnrealEditorUtils
 #endif

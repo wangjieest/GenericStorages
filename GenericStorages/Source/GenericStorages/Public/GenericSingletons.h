@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #include "CoreMinimal.h"
@@ -117,8 +117,10 @@ template<typename T, typename = void>
 struct TGenericSingletonAOP;
 // static T* CustomConstruct(const UObject* WorldContextObject, UClass* SubClass = nullptr);
 
-DECLARE_DELEGATE_OneParam(FAsyncObjectCallback, UObject*);
-DECLARE_DELEGATE_OneParam(FAsyncBatchCallback, TArray<UObject*>&);
+DECLARE_DELEGATE_OneParam(FAsyncLoadObjCallback, UObject*);
+DECLARE_DELEGATE_OneParam(FAsyncLoadClsCallback, UClass*);
+DECLARE_DELEGATE_OneParam(FAsyncBatchObjCallback, TArray<UObject*>&);
+DECLARE_DELEGATE_OneParam(FAsyncBatchClsCallback, TArray<UClass*>&);
 
 #define USE_GENEIRC_SINGLETON_GUARD WITH_EDITOR
 
@@ -213,7 +215,7 @@ protected:
 	}
 
 	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", CallableWithoutWorldContext, DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject * PureInstanceSingleton(UClass * Class, bool bCreate = true) { return K2_GetSingleton(Class, nullptr, bCreate); }
+	static UObject* PureInstanceSingleton(UClass* Class, bool bCreate = true) { return K2_GetSingleton(Class, nullptr, bCreate); }
 
 public:  // C++
 	FORCEINLINE static UObject* FindSingleton(UClass* Class, const UObject* WorldContextObject) { return GetSingletonInternal(Class, WorldContextObject, false); }
@@ -287,18 +289,38 @@ public:
 	}
 
 public:
-	static TSharedPtr<struct FStreamableHandle> AsyncLoad(const TArray<FSoftObjectPath>& InPaths, FAsyncBatchCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
+	// Object
+	static TSharedPtr<struct FStreamableHandle> AsyncLoadObj(const FSoftObjectPath& InPath, FAsyncLoadObjCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
 	template<typename LambdaType>
-	static FORCEINLINE auto AsyncLoad(const TArray<FSoftObjectPath>& InPaths, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	static FORCEINLINE auto AsyncLoadObj(const FSoftObjectPath& InPath, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
 	{
-		return AsyncLoad(InPaths, CreateWeakLambda<FAsyncBatchCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
+		return AsyncLoadObj(InPath, CreateWeakLambda<FAsyncLoadObjCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
+	}
+	static TSharedPtr<struct FStreamableHandle> AsyncLoadObj(const TArray<FSoftObjectPath>& InPaths, FAsyncBatchObjCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
+	template<typename LambdaType>
+	static FORCEINLINE auto AsyncLoadObj(const TArray<FSoftObjectPath>& InPaths, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	{
+		return AsyncLoadObj(InPaths, CreateWeakLambda<FAsyncBatchObjCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
 	}
 
-	static TSharedPtr<struct FStreamableHandle> AsyncLoad(const FSoftObjectPath& InPath, FAsyncObjectCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
-	template<typename LambdaType>
-	static FORCEINLINE auto AsyncLoad(const FSoftObjectPath& InPath, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	// Class
+	static FORCEINLINE TSharedPtr<struct FStreamableHandle> AsyncLoadCls(const FSoftClassPath& InPath, FAsyncLoadClsCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
 	{
-		return AsyncLoad(InPath, CreateWeakLambda<FAsyncObjectCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
+		return AsyncLoadObj(InPath, MoveTemp(*reinterpret_cast<FAsyncLoadObjCallback*>(&Cb)), bSkipInvalid, Priority);
+	}
+	template<typename LambdaType>
+	static FORCEINLINE auto AsyncLoadCls(const FSoftClassPath& InPath, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	{
+		return AsyncLoadCls(InPath, CreateWeakLambda<FAsyncLoadClsCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
+	}
+	static FORCEINLINE TSharedPtr<struct FStreamableHandle> AsyncLoadCls(const TArray<FSoftClassPath>& InPaths, FAsyncBatchClsCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	{
+		return AsyncLoadObj((const TArray<FSoftObjectPath>&)InPaths, MoveTemp(*reinterpret_cast<FAsyncBatchObjCallback*>(&Cb)), bSkipInvalid, Priority);
+	}
+	template<typename LambdaType>
+	static FORCEINLINE auto AsyncLoadCls(const TArray<FSoftClassPath>& InPaths, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
+	{
+		return AsyncLoadCls(InPaths, CreateWeakLambda<FAsyncBatchClsCallback>(Obj, Forward<LambdaType>(Cb)), bSkipInvalid, Priority);
 	}
 
 	// AOP(compile time only), any advice for runtime dynamic AOP?
@@ -309,11 +331,11 @@ public:
 		return TGenericConstructionAOP<T>::CustomConstruct(ConvertNullType(WorldContextObject), Parameter);
 	}
 
-	static bool AsyncCreate(const FSoftClassPath& InPath, FAsyncObjectCallback Cb, UObject* WorldContextObj = nullptr);
+	static bool AsyncCreate(const FSoftClassPath& InPath, FAsyncLoadObjCallback Cb, UObject* WorldContextObj = nullptr);
 	template<typename F, typename T = UObject>
-	static bool AsyncCreate(const FSoftClassPath& InPath, const UObject* ContextObj, F&& f)
+	static bool AsyncCreate(const FSoftClassPath& InPath, const UObject* ContextObj, F&& Cb)
 	{
-		return AsyncLoad(InPath, ContextObj, [ContextObj, f{MoveTemp(f)}](UObject* ResolvedObj) { f(CreateInstance<T>(ContextObj, Cast<UClass>(ResolvedObj))); }).IsValid();
+		return AsyncLoadCls(InPath, ContextObj, [ContextObj, Cb{MoveTemp(Cb)}](UClass* ResolvedCls) { Cb(CreateInstance<T>(ContextObj, ResolvedCls)); }).IsValid();
 	}
 
 public:
@@ -343,7 +365,10 @@ public:
 	{
 #if USE_GENEIRC_SINGLETON_GUARD
 		GenericSingletons::bGenericSingltonInCtor<T> = true;
-		ON_SCOPE_EXIT { GenericSingletons::bGenericSingltonInCtor<T> = false; };
+		ON_SCOPE_EXIT
+		{
+			GenericSingletons::bGenericSingltonInCtor<T> = false;
+		};
 #endif
 		auto NativeClass = T::StaticClass();
 		check(!SubClass || SubClass->IsChildOf(NativeClass));
@@ -418,7 +443,10 @@ T* TGenericSingleBase<T>::GetSingleton(const U* WorldContextObject, bool bCreate
 {
 #if USE_GENEIRC_SINGLETON_GUARD
 	GenericSingletons::bGenericSingltonInCtor<T> = true;
-	ON_SCOPE_EXIT { GenericSingletons::bGenericSingltonInCtor<T> = false; };
+	ON_SCOPE_EXIT
+	{
+		GenericSingletons::bGenericSingltonInCtor<T> = false;
+	};
 #endif
 	return UGenericSingletons::GetSingleton<T>(WorldContextObject, bCreate);
 }

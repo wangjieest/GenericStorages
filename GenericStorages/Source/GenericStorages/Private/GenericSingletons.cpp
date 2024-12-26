@@ -571,7 +571,7 @@ static FDelayedAutoRegisterHelper DelayInnerInitUGMPRpcProxy(EDelayedRegisterRun
 	// GEngine->OnWorldAdded();
 	// GEngine->OnWorldDestroyed();
 	// FCoreUObjectDelegates::PreLoadMap.
-	FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
+	FWorldDelegates::OnWorldBeginTearDown.AddLambda([](UWorld* World, auto&&...) {
 		UE_LOG(LogGenericStorages, Log, TEXT("UGenericSingletons Singleton Removed World [%s]"), *GetNameSafe(World));
 		WorldLocalStorages::RemoveLocalValue<UGenericSingletons>(World);
 		World->ExtraReferencedObjects.Remove(nullptr);
@@ -781,7 +781,7 @@ UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObjec
 	return Ptr;
 }
 
-TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const FSoftObjectPath& SoftPath, FAsyncObjectCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
+TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadObj(const FSoftObjectPath& SoftPath, FAsyncLoadObjCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
 {
 	auto& StreamableMgr = UAssetManager::GetStreamableManager();
 	return StreamableMgr.RequestAsyncLoad(SoftPath,
@@ -795,12 +795,12 @@ TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const FSoftOb
 #if !UE_BUILD_SHIPPING
 										  ,
 										  false,
-										  FString::Printf(TEXT("GenericSingletons::AsyncLoad [%s]"), *SoftPath.ToString())
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoadObj [%s]"), *SoftPath.ToString())
 #endif
 	);
 }
 
-TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const TArray<FSoftObjectPath>& InPaths, FAsyncBatchCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
+TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadObj(const TArray<FSoftObjectPath>& InPaths, FAsyncBatchObjCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
 {
 	auto& StreamableMgr = UAssetManager::GetStreamableManager();
 	return StreamableMgr.RequestAsyncLoad(InPaths,
@@ -820,13 +820,57 @@ TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoad(const TArray<
 #if !UE_BUILD_SHIPPING
 										  ,
 										  false,
-										  FString::Printf(TEXT("GenericSingletons::AsyncLoads [%s]"), *FString::JoinBy(InPaths, TEXT(","), [](const FSoftObjectPath& SoftPath) { return SoftPath.ToString(); }))
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoadObjs [%s]"), *FString::JoinBy(InPaths, TEXT(","), [](const FSoftObjectPath& SoftPath) { return SoftPath.ToString(); }))
+#endif
+	);
+}
+#if 0
+TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadCls(const FSoftClassPath& SoftPath, FAsyncLoadClsCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
+{
+	auto& StreamableMgr = UAssetManager::GetStreamableManager();
+	return StreamableMgr.RequestAsyncLoad(SoftPath,
+										  FStreamableDelegate::CreateLambda([bSkipInvalid, Cb{MoveTemp(DelegateCallback)}, SoftPath] {
+											  auto* Obj = SoftPath.ResolveClass();
+											  if (!bSkipInvalid || Obj)
+												  Cb.ExecuteIfBound(Obj);
+										  }),
+										  Priority,
+										  true
+#if !UE_BUILD_SHIPPING
+										  ,
+										  false,
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoadCls [%s]"), *SoftPath.ToString())
 #endif
 	);
 }
 
-bool UGenericSingletons::AsyncCreate(const FSoftClassPath& SoftPath, FAsyncObjectCallback Cb, UObject* WorldContextObj)
+TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadCls(const TArray<FSoftClassPath>& InPaths, FAsyncBatchClsCallback DelegateCallback, bool bSkipInvalid, TAsyncLoadPriority Priority)
+{
+	auto& StreamableMgr = UAssetManager::GetStreamableManager();
+	return StreamableMgr.RequestAsyncLoad(*reinterpret_cast<const TArray<FSoftObjectPath>*>(&InPaths),
+										  FStreamableDelegate::CreateLambda([bSkipInvalid, Cb{MoveTemp(DelegateCallback)}, Paths{InPaths}] {
+											  TArray<UClass*> Loaded;
+											  Loaded.Reserve(Paths.Num());
+											  for (int32 i = 0; i < Paths.Num(); ++i)
+											  {
+												  auto Cls = Paths[i].ResolveClass();
+												  if (!bSkipInvalid || IsValid(Cls))
+													  Loaded.Add(Cls);
+											  }
+											  Cb.ExecuteIfBound(Loaded);
+										  }),
+										  Priority,
+										  true
+#if !UE_BUILD_SHIPPING
+										  ,
+										  false,
+										  FString::Printf(TEXT("GenericSingletons::AsyncLoadClss [%s]"), *FString::JoinBy(InPaths, TEXT(","), [](const FSoftObjectPath& SoftPath) { return SoftPath.ToString(); }))
+#endif
+	);
+}
+#endif
+bool UGenericSingletons::AsyncCreate(const FSoftClassPath& SoftPath, FAsyncLoadObjCallback Cb, UObject* WorldContextObj)
 {
 	WorldContextObj = WorldContextObj ? WorldContextObj : Cb.GetUObject();
-	return AsyncLoad(SoftPath, WorldContextObj, [WorldContextObj, Cb{MoveTemp(Cb)}](UObject* ResolvedObj) { Cb.ExecuteIfBound(CreateInstanceImpl(WorldContextObj, Cast<UClass>(ResolvedObj))); }).IsValid();
+	return AsyncLoadCls(SoftPath, WorldContextObj, [WorldContextObj, Cb{MoveTemp(Cb)}](UClass* ResolvedCls) { Cb.ExecuteIfBound(CreateInstanceImpl(WorldContextObj, ResolvedCls)); }).IsValid();
 }

@@ -207,7 +207,7 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 					}
 				}
 				TArray<FString> DisallowedClassNames;
-				BindProp->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
+				It->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
 				if (DisallowedClassNames.Num() > 0)
 				{
 					for (const FString& ClassName : DisallowedClassNames)

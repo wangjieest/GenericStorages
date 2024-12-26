@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 #if WITH_EDITOR
@@ -164,18 +164,50 @@ GENERICSTORAGES_API ISettingsModule* GetSettingsModule();
 GENERICSTORAGES_API bool RegisterSettings(const FName& ContainerName,
 										  const FName& CategoryName,
 										  const FName& SectionName,
-										  const FText& DisplayName,
-										  const FText& Description,
+										  const FText& DisplayText,
+										  const FText& DescriptionText,
 										  const TWeakObjectPtr<UObject>& SettingsObject,
 										  ISettingsModule* InSettingsModule = nullptr);
 
-GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName = NAME_None, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
+struct FConfigurationPos
+{
+	FName SectionName;
+	FName CategoryName;
+	FName ContainerName;
+
+	FConfigurationPos(FName InSectionName = NAME_None, FName InCategoryName = "ExtraConfiguration", FName InContainerName = "Project")
+		: SectionName(InSectionName)
+		, CategoryName(InCategoryName)
+		, ContainerName(InContainerName)
+	{
+	}
+};
+
+GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FConfigurationPos& NameCfg = {}, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
 GENERICSTORAGES_API bool ShouldEndPlayMap();
 }  // namespace UnrealEditorUtils
 #else
 namespace UnrealEditorUtils
 {
-GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const FName& SessionName = NAME_None, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false);
+struct FConfigurationPos
+{
+	FName SectionName;
+	FName CategoryName;
+	FName ContainerName;
+
+	FConfigurationPos(FName InSectionName = NAME_None, FName InCategoryName = "ExtraConfiguration", FName InContainerName = "Project")
+		: SectionName(InSectionName)
+		, CategoryName(InCategoryName)
+		, ContainerName(InContainerName)
+	{
+	}
+};
+
+template<typename T>
+GENERICSTORAGES_API bool AddConfigurationOnProject(UObject* Obj, const T&, bool bOnlyCDO = true, bool bOnlyNative = true, bool bAllowAbstract = false)
+{
+	return false;
+}
 FORCEINLINE bool ShouldEndPlayMap()
 {
 	return false;
