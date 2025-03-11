@@ -132,15 +132,54 @@ bool ChunkingFile(const TCHAR* Filename, TArray64<uint8>& Buffer, const TFunctio
 	return false;
 }
 
-GENERICSTORAGES_API void* OpenLockHandle(const TCHAR* Path, FString& ErrorCategory)
+void* OpenLockHandle(const TCHAR* Path, FString& ErrorCategory)
 {
 	ensure(FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*FPaths::GetPath(Path)));
 	return mio::OpenLockHandle(Path, ErrorCategory);
 }
-GENERICSTORAGES_API void CloseLockHandle(void* InHandle)
+void CloseLockHandle(void* InHandle)
 {
 	if (InHandle)
 		mio::CloseLockHandle(InHandle);
+}
+
+TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int64 MaxTries)
+{
+	struct FProcessLockIndexImpl : public FProcessLockIndex
+	{
+		void* Handle = nullptr;
+		FProcessLockIndexImpl(int32 Idx, void* InHandle)
+			: Handle(InHandle)
+		{
+			Index = Idx;
+		}
+		~FProcessLockIndexImpl()
+		{
+			if (Handle)
+				CloseLockHandle(Handle);
+		}
+	};
+
+	int64 StartIndex = 0;
+
+	if (FCommandLine::IsInitialized())
+	{
+		FParse::Value(FCommandLine::Get(), TEXT("-GlobalSystemIndex="), StartIndex);
+		StartIndex = FMath::Max(int64(0), StartIndex);
+	}
+
+	auto LockDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), FString::Printf(TEXT(".indexlock"))));
+	for (int64 Index = StartIndex; Index < MaxTries; ++Index)
+	{
+		FString ErrorMsg;
+		FString TestFileName = FString::Printf(TEXT("%s%s"), Key ? Key : TEXT("GlobalIndex"), *LexToString(Index));
+		if (auto Handle = MIO::OpenLockHandle(*FPaths::Combine(LockDir, FString::Printf(TEXT("%s.lock"), *TestFileName)), ErrorMsg))
+		{
+			return MakeShared<FProcessLockIndexImpl>(Index, Handle);
+		}
+	}
+	ensureMsgf(false, TEXT("Failed for GetGlobalSystemIndexHandle(%s, %s)"), Key ? Key : TEXT("GlobalIndex"), *LexToString(MaxTries));
+	return nullptr;
 }
 
 FString ConvertToAbsolutePath(FString InPath)

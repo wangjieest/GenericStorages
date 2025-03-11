@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -69,7 +69,7 @@
 	template<typename... Args>                                                            \
 	decltype(auto) FuncName(Args&&... args)                                               \
 	{                                                                                     \
-		return （*Access##Class##FuncName())(std::forward<Args>(args)...);                \
+		return (*Access##Class##FuncName())(std::forward<Args>(args)...);                 \
 	}                                                                                     \
 	}
 

@@ -78,4 +78,20 @@ protected:
 	uint32 ReadIdx;
 	uint32 WriteIdx;
 };
+
+GENERICSTORAGES_API void* OpenLockHandle(const TCHAR* Path, FString& ErrorCategory);
+GENERICSTORAGES_API void CloseLockHandle(void* InHandle);
+
+struct FProcessLockIndex
+{
+	int64 Index;
+
+	FString AsSuffix(const FString& Prefix = TEXT("_")) const
+	{
+		if (!Index)
+			return TEXT("");
+		return Prefix + LexToString(Index);
+	}
+};
+GENERICSTORAGES_API TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int64 MaxTries = 1024);
 }  // namespace MIO

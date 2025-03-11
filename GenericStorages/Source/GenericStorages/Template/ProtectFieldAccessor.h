@@ -1,7 +1,7 @@
 // Copyright GenericStorages, Inc. All Rights Reserved.
 #pragma once
 #include "CoreMinimal.h"
-
+#include "Runtime/Launch/Resources/Version.h"
 #include "MACRO_FOR_EACH.h"
 
 #include <type_traits>
@@ -38,6 +38,13 @@ auto ToRawPtr(const TSharedRef<T, Mode>& Ptr)
 {
 	return &Ptr.Get();
 }
+#if ENGINE_MAJOR_VERSION >= 5
+template<typename U>
+auto ToRawPtr(const TObjectPtr<U>& Ptr)
+{
+	return Ptr.Get();
+}
+#endif
 }  // namespace transcribe
 
 #define Z_GS_USING_MEMBER_(Member) using Z_SuperType::Member

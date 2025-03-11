@@ -284,6 +284,17 @@ namespace Internal
 		TMap<const char*, TSharedPtr<void>> Value;
 	};
 	static TArray<FStoredPair, TInlineAllocator<4>> Storages;
+
+	void BindWorldLifetime()
+	{
+		if (TrueOnFirstCall([] {}))
+		{
+			FWorldDelegates::OnWorldCleanup.AddStatic([](UWorld* InWorld, bool, bool) { Storages.RemoveAllSwap([&](auto& Cell) { return Cell.WeakCtx == InWorld; }); });
+#if WITH_EDITOR
+			FEditorDelegates::EndPIE.AddStatic([](const bool) { Storages.Reset(); });
+#endif
+		}
+	}
 }  // namespace Internal
 
 struct FStorageUtils
@@ -291,14 +302,7 @@ struct FStorageUtils
 	template<typename U>
 	static void* GetStorage(const U* ContextObj, const char* TypeName, const TFunctionRef<void*()>& InCtor, void (*InDtor)(void*))
 	{
-		if (TrueOnFirstCall([] {}))
-		{
-			FWorldDelegates::OnWorldBeginTearDown.AddStatic([](UWorld* InWorld) { Internal::Storages.RemoveAllSwap([&](auto& Cell) { return Cell.WeakCtx == InWorld; }); });
-#if WITH_EDITOR
-			FEditorDelegates::EndPIE.AddStatic([](const bool) { Internal::Storages.Reset(); });
-#endif
-		}
-
+		Internal::BindWorldLifetime();
 		check(!ContextObj || IsValid(ContextObj));
 		auto& ValRef = FLocalStorageOps::FindOrAdd(Internal::Storages, ContextObj, [&]() -> TMap<const char*, TSharedPtr<void>>& {
 			auto& Pair = Add_GetRef(Internal::Storages);

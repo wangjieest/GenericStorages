@@ -242,15 +242,22 @@ FTimerManager* GetTimerManager(UWorld* InWorld)
 	}
 }
 
-FTimerHandle SetTimer(UWorld* InWorld, FTimerDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay /*= -1.f*/)
+bool SetTimer(FTimerHandle& InOutHandle, UWorld* InWorld, FTimerDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay /*= -1.f*/)
 {
-	FTimerHandle TimerHandle;
 	auto TimerMgr = GetTimerManager(InWorld);
 	if (ensure(TimerMgr))
 	{
-		TimerMgr->SetTimer(TimerHandle, InDelegate, InRate, InbLoop, InFirstDelay);
+		if(InDelegate.IsBound())
+		{
+			TimerMgr->SetTimer(InOutHandle, InDelegate, InRate, InbLoop, InFirstDelay);
+		}
+		else if (InOutHandle.IsValid())
+		{
+			TimerMgr->ClearTimer(InOutHandle);
+		}
+		return true;
 	}
-	return TimerHandle;
+	return false;
 }
 
 UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, UObject*& OutCtx)
