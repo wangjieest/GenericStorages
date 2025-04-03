@@ -421,10 +421,6 @@ using TGenericPieLocalStorage = WorldLocalStorages::TGenericLocalStorage<T, N, P
 namespace Internal
 {
 	template<typename T>
-	TGenericGameLocalStorage<T> GlobalGameStorage;
-
-	//////////////////////////////////////////////////////////////////////////
-	template<typename T>
 	TGenericWorldLocalStorage<T> GlobalWorldStorage;
 }  // namespace Internal
 
@@ -445,37 +441,25 @@ decltype(auto) GetCurrentLocalValue(TArgs&&... Args)
 	return Internal::GlobalWorldStorage<T>.GetLocalValue(UGenericLocalStore::GetGameWorldChecked(), Forward<TArgs>(Args)...);
 }
 
-//////////////////////////////////////////////////////////////////////////
-template<typename T, typename... TArgs>
-decltype(auto) GetGameValue(const UObject* Context, TArgs&&... Args)
-{
-	return Internal::GlobalWorldStorage<T>.GetLocalValue(Context, Forward<TArgs>(Args)...);
-}
-template<typename T>
-void RemoveGameValue(const UObject* Context)
-{
-	return Internal::GlobalWorldStorage<T>.RemoveLocalValue(Context);
-}
-
-template<typename T, typename... TArgs>
-decltype(auto) GetCurrentGameValue(TArgs&&... Args)
-{
-	return Internal::GlobalWorldStorage<T>.GetLocalValue(UGenericLocalStore::GetGameWorldChecked(), Forward<TArgs>(Args)...);
-}
 #if 0
 // static usage : world local storage
 static TGenericLocalStorage<T> WorldLocalStorage;
 #endif
-};  // namespace WorldLocalStorages
+}  // namespace WorldLocalStorages
 
 //////////////////////////////////////////////////////////////////////////
-namespace GenericStorages
+namespace GenericLocalStorages
 {
 namespace Internal
 {
 	template<typename T>
+	WorldLocalStorages::TGenericGameLocalStorage<T> GlobalGameStorage;
+	//////////////////////////////////////////////////////////////////////////
+
+	template<typename T>
 	WorldLocalStorages::TGenericPieLocalStorage<T> GlobalPieLocalStorage;
 }  // namespace Internal
+	
 template<typename T, typename... TArgs>
 decltype(auto) GetPieLocalValue(const UObject* Context, TArgs&&... Args)
 {
@@ -485,6 +469,22 @@ template<typename T>
 void RemovePieLocalValue(const UObject* Context)
 {
 	return Internal::GlobalPieLocalStorage<T>.RemoveLocalValue(Context);
+}
+//////////////////////////////////////////////////////////////////////////
+template<typename T, typename... TArgs>
+decltype(auto) GetGameValue(const UObject* Context, TArgs&&... Args)
+{
+	return Internal::GlobalGameStorage<T>.GetLocalValue(Context, Forward<TArgs>(Args)...);
+}
+template<typename T>
+void RemoveGameValue(const UObject* Context)
+{
+	return Internal::GlobalGameStorage<T>.RemoveLocalValue(Context);
+}
+template<typename T, typename... TArgs>
+decltype(auto) GetCurrentGameValue(TArgs&&... Args)
+{
+	return Internal::GlobalGameStorage<T>.GetLocalValue(UGenericLocalStore::GetGameWorldChecked(), Forward<TArgs>(Args)...);
 }
 
 }  // namespace GenericStorages

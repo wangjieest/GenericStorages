@@ -304,10 +304,8 @@ public:
 	}
 
 	// Class
-	static FORCEINLINE TSharedPtr<struct FStreamableHandle> AsyncLoadCls(const FSoftClassPath& InPath, FAsyncLoadClsCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
-	{
-		return AsyncLoadObj(InPath, MoveTemp(*reinterpret_cast<FAsyncLoadObjCallback*>(&Cb)), bSkipInvalid, Priority);
-	}
+	static TSharedPtr<struct FStreamableHandle> AsyncLoadCls(const FSoftClassPath& InPath, FAsyncLoadClsCallback Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0);
+
 	template<typename LambdaType>
 	static FORCEINLINE auto AsyncLoadCls(const FSoftClassPath& InPath, const UObject* Obj, LambdaType&& Cb, bool bSkipInvalid = false, TAsyncLoadPriority Priority = 0)
 	{

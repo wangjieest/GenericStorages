@@ -187,7 +187,7 @@ public:
 		}
 
 #if UE_4_25_OR_LATER
-		FLevelEditorModule* LevelEditorModule = GIsEditor ? FModuleManager::GetModulePtr<FLevelEditorModule>(TEXT("LevelEditor")) : nullptr;
+		FLevelEditorModule* LevelEditorModule = (GIsEditor && !IsRunningCommandlet()) ? FModuleManager::GetModulePtr<FLevelEditorModule>(TEXT("LevelEditor")) : nullptr;
 		if (LevelEditorModule)
 		{
 			// a handy place to quick set RunUnderOneProcess
@@ -289,9 +289,11 @@ namespace Internal
 	{
 		if (TrueOnFirstCall([] {}))
 		{
-			FWorldDelegates::OnWorldCleanup.AddStatic([](UWorld* InWorld, bool, bool) { Storages.RemoveAllSwap([&](auto& Cell) { return Cell.WeakCtx == InWorld; }); });
 #if WITH_EDITOR
+			FWorldDelegates::OnWorldCleanup.AddStatic([](UWorld* InWorld, bool, bool) { Storages.RemoveAllSwap([&](auto& Cell) { return Cell.WeakCtx == InWorld; }); });
 			FEditorDelegates::EndPIE.AddStatic([](const bool) { Storages.Reset(); });
+#else
+			FWorldDelegates::OnWorldCleanup.AddStatic([](UWorld* InWorld, bool, bool) { Storages.RemoveAllSwap([&](auto& Cell) { return Cell.WeakCtx == InWorld; }); });
 #endif
 		}
 	}
