@@ -547,7 +547,13 @@ void FDatatableTypePicker::Init(TSharedPtr<IPropertyHandle> PropertyHandle)
 	{
 		FString DataTableType = PropertyHandle->GetMetaData("DataTableType");
 		if (!DataTableType.IsEmpty())
-			ScriptStruct = FindObject<UScriptStruct>(ANY_PACKAGE_COMPATIABLE, *DataTableType);
+		{
+#if UE_5_00_OR_LATER
+		ScriptStruct = UClass::TryFindTypeSlowSafe<UScriptStruct>(DataTableType);
+#else
+		ScriptStruct = FindObject<UScriptStruct>(ANY_PACKAGE_COMPATIABLE, *DataTableType);
+#endif
+		}
 		FString DataTablePath = PropertyHandle->GetMetaData("DataTablePath");
 		if (!DataTablePath.IsEmpty())
 			FilterPath = DataTablePath;

@@ -107,7 +107,7 @@ bool SClassPickerGraphPin::IsMatchedPinType(UEdGraphPin* InGraphPinObj)
 			   || InGraphPinObj->PinType.PinCategory == UEdGraphSchema_K2::PC_SoftClass || InGraphPinObj->PinType.PinCategory == UEdGraphSchema_K2::PC_Class);
 }
 
-bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowedClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp)
+bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowedClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp, TFunctionRef<void(const FProperty*)> Op)
 {
 	bool bAllowAbstract = false;
 	do
@@ -120,6 +120,8 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 
 		if (BindProp)
 		{
+			Op(BindProp);
+
 			bAllowAbstract = BindProp->GetBoolMetaData(TEXT("AllowAbstract"));
 			ImplementClass = BindProp->GetClassMetaData(TEXT("MustImplement"));
 
@@ -141,7 +143,11 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 			{
 				for (const FString& ClassName : AllowedClassNames)
 				{
+#if UE_5_00_OR_LATER
+					UClass* AllowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
 					UClass* AllowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
 					const bool bIsInterface = AllowedClass && AllowedClass->HasAnyClassFlags(CLASS_Interface);
 					if (AllowedClass && (!bIsInterface || (ImplementClass && AllowedClass->ImplementsInterface(ImplementClass))))
 					{
@@ -155,7 +161,11 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 			{
 				for (const FString& ClassName : DisallowedClassNames)
 				{
+#if UE_5_00_OR_LATER
+					UClass* DisallowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
 					UClass* DisallowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
 					const bool bIsInterface = DisallowedClass && DisallowedClass->HasAnyClassFlags(CLASS_Interface);
 					if (DisallowedClass && (!bIsInterface || (ImplementClass && DisallowedClass->ImplementsInterface(ImplementClass))))
 					{
@@ -177,6 +187,7 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 		{
 			if ((It->HasAnyPropertyFlags(CPF_Parm) && It->GetFName() == ToName(InGraphPinObj->PinName)))
 			{
+				Op(*It);
 				bAllowAbstract = It->GetBoolMetaData(TEXT("AllowAbstract"));
 				ImplementClass = It->GetClassMetaData(TEXT("MustImplement"));
 
@@ -198,7 +209,11 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 				{
 					for (const FString& ClassName : AllowedClassNames)
 					{
+#if UE_5_00_OR_LATER
+						UClass* AllowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
 						UClass* AllowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
 						const bool bIsInterface = AllowedClass && AllowedClass->HasAnyClassFlags(CLASS_Interface);
 						if (AllowedClass && (!bIsInterface || (ImplementClass && AllowedClass->ImplementsInterface(ImplementClass))))
 						{
@@ -212,7 +227,11 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 				{
 					for (const FString& ClassName : DisallowedClassNames)
 					{
+#if UE_5_00_OR_LATER
+						UClass* DisallowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
 						UClass* DisallowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
 						const bool bIsInterface = DisallowedClass && DisallowedClass->HasAnyClassFlags(CLASS_Interface);
 						if (DisallowedClass && (!bIsInterface || (ImplementClass && DisallowedClass->ImplementsInterface(ImplementClass))))
 						{
@@ -234,6 +253,8 @@ public:
 	const UPackage* GraphPinOutermostPackage = nullptr;
 	TSet<const UClass*> AllowedChildrenOfClasses;
 	TSet<const UClass*> DisallowedChildrenOfClasses;
+	TSet<FName> WithinMetaKeys;
+	TSet<FName> WithoutMetaKeys;
 	const UClass* InterfaceThatMustBeImplemented = nullptr;
 	bool bAllowAbstract = false;
 
@@ -259,6 +280,29 @@ public:
 			Result &= !ClassPackage->ContainsMap() || ClassPackage == GraphPinOutermostPackage;
 		}
 
+		if (Result && WithinMetaKeys.Num())
+		{
+			for (const FName& Key : WithinMetaKeys)
+			{
+				if (!InClass->HasMetaData(Key))
+				{
+					Result = false;
+					break;
+				}
+			}
+		}
+
+		if (Result && WithoutMetaKeys.Num())
+		{
+			for (const FName& Key : WithoutMetaKeys)
+			{
+				if (InClass->HasMetaData(Key))
+				{
+					Result = false;
+					break;
+				}
+			}
+		}
 		return Result;
 	}
 
@@ -331,7 +375,23 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 		const UClass* InterfaceMustBeImplemented = nullptr;
 		TSet<const UClass*> AllowedClasses;
 		TSet<const UClass*> DisallowedClasses;
-		bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp);
+		TSet<FName> WithinMetaKeys;
+		TSet<FName> WithoutMetaKeys;
+		bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
+			TArray<FString> WithinMetaKey;
+			TArray<FString> WithoutMetaKey;
+			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
+			Prop->GetMetaData(TEXT("WithoutMetaKey")).ParseIntoArray(WithoutMetaKey, TEXT(","), true);
+			for (auto&Key:WithinMetaKey)
+			{
+				WithinMetaKeys.Add(*Key);
+			}
+			for(auto&Key:WithoutMetaKey)
+			{
+				WithoutMetaKeys.Add(*Key);
+			}
+		});
+
 		if (!AllowedClasses.Num())
 		{
 			AllowedClasses.Add(UObject::StaticClass());
@@ -340,8 +400,10 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 		TSharedPtr<FSoftclassPathSelectorFilter> Filter = MakeShareable(new FSoftclassPathSelectorFilter);
 		Filter->bAllowAbstract = bAllowAbstract;
 		Filter->InterfaceThatMustBeImplemented = InterfaceMustBeImplemented;
-		Filter->AllowedChildrenOfClasses.Append(MoveTemp(AllowedClasses));
-		Filter->DisallowedChildrenOfClasses.Append(MoveTemp(DisallowedClasses));
+		Filter->WithinMetaKeys = MoveTemp(WithinMetaKeys);
+		Filter->WithoutMetaKeys = MoveTemp(WithoutMetaKeys);
+		Filter->AllowedChildrenOfClasses = MoveTemp(AllowedClasses);
+		Filter->DisallowedChildrenOfClasses = MoveTemp(DisallowedClasses);
 		Filter->GraphPinOutermostPackage = GraphPinObj->GetOuter()->GetOutermost();
 		ClassFilter = Filter;
 	}
@@ -409,7 +471,23 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 	const UClass* InterfaceMustBeImplemented = nullptr;
 	TSet<const UClass*> AllowedClasses;
 	TSet<const UClass*> DisallowedClasses;
-	bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp);
+	TSet<FName> WithinMetaKeys;
+	TSet<FName> WithoutMetaKeys;
+	bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
+			TArray<FString> WithinMetaKey;
+			TArray<FString> WithoutMetaKey;
+			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
+			Prop->GetMetaData(TEXT("WithoutMetaKey")).ParseIntoArray(WithoutMetaKey, TEXT(","), true);
+			for (auto&Key:WithinMetaKey)
+			{
+				WithinMetaKeys.Add(*Key);
+			}
+			for(auto&Key:WithoutMetaKey)
+			{
+				WithoutMetaKeys.Add(*Key);
+			}
+		});
+
 	if (!AllowedClasses.Num())
 	{
 		AllowedClasses.Add(UObject::StaticClass());
@@ -424,8 +502,10 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 
 	Filter->bAllowAbstract = bAllowAbstract;
 	Filter->InterfaceThatMustBeImplemented = InterfaceMustBeImplemented;
-	Filter->AllowedChildrenOfClasses.Append(MoveTemp(AllowedClasses));
-	Filter->DisallowedChildrenOfClasses.Append(MoveTemp(DisallowedClasses));
+	Filter->WithinMetaKeys = MoveTemp(WithinMetaKeys);
+	Filter->WithoutMetaKeys = MoveTemp(WithoutMetaKeys);
+	Filter->AllowedChildrenOfClasses = MoveTemp(AllowedClasses);
+	Filter->DisallowedChildrenOfClasses = MoveTemp(DisallowedClasses);
 	Filter->GraphPinOutermostPackage = GraphPinObj->GetOuter()->GetOutermost();
 
 	return SNew(SBox)

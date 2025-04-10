@@ -72,7 +72,11 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		const FString& ClassName = PropertyHandle->GetMetaData("MetaClass");
 		if (!ClassName.IsEmpty())
 		{
+#if UE_5_00_OR_LATER
+			UClass* Class = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
 			UClass* Class = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
 			if (!Class)
 			{
 				Class = LoadObject<UClass>(nullptr, *ClassName);
