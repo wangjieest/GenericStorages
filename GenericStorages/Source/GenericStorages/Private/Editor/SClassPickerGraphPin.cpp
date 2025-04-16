@@ -107,7 +107,9 @@ bool SClassPickerGraphPin::IsMatchedPinType(UEdGraphPin* InGraphPinObj)
 			   || InGraphPinObj->PinType.PinCategory == UEdGraphSchema_K2::PC_SoftClass || InGraphPinObj->PinType.PinCategory == UEdGraphSchema_K2::PC_Class);
 }
 
-bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowedClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp, TFunctionRef<void(const FProperty*)> Op)
+struct FClassPickerGraphPinUtils
+{
+	static bool GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowedClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp, TFunctionRef<void(const FProperty*)> Op)
 {
 	bool bAllowAbstract = false;
 	do
@@ -115,7 +117,7 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 		if (!InGraphPinObj)
 			break;
 
-		if (!ensure(BindProp || IsMatchedToCreate(InGraphPinObj)))
+		if (!ensure(BindProp || SClassPickerGraphPin::IsMatchedToCreate(InGraphPinObj)))
 			break;
 
 		if (BindProp)
@@ -246,6 +248,9 @@ bool SClassPickerGraphPin::GetMetaClassData(UEdGraphPin* InGraphPinObj, const UC
 	} while (0);
 	return bAllowAbstract;
 }
+};
+
+
 
 class FSoftclassPathSelectorFilter : public IClassViewerFilter
 {
@@ -377,7 +382,7 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 		TSet<const UClass*> DisallowedClasses;
 		TSet<FName> WithinMetaKeys;
 		TSet<FName> WithoutMetaKeys;
-		bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
+		bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
 			TArray<FString> WithinMetaKey;
 			TArray<FString> WithoutMetaKey;
 			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
@@ -473,7 +478,7 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 	TSet<const UClass*> DisallowedClasses;
 	TSet<FName> WithinMetaKeys;
 	TSet<FName> WithoutMetaKeys;
-	bool bAllowAbstract = GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
+	bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
 			TArray<FString> WithinMetaKey;
 			TArray<FString> WithoutMetaKey;
 			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);

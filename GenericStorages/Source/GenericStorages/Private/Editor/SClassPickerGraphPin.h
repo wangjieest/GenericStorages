@@ -25,7 +25,7 @@ protected:
 	virtual bool OnCanUseAssetData(const FAssetData& AssetData);
 };
 
-// CustomClassPinPicker with MetaClass [AllowedClasses DisallowedClasses AllowAbstract MustImplement NotConnectable MetaKey NoMetaKey]
+// CustomClassPinPicker with MetaClass [AllowedClasses DisallowedClasses AllowAbstract MustImplement NotConnectable WithinMetaKey WithoutMetaKey]
 class CustomClassPinPicker;
 class GENERICSTORAGES_API SClassPickerGraphPin : public SGraphPinObjectExtra
 {
@@ -41,7 +41,7 @@ public:
 	static UClass* GetChoosenClass(UEdGraphPin* InGraphPinObj);
 
 protected:
-	static bool GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp = nullptr, TFunctionRef<void(const FProperty*)> Op = [](const FProperty*){});
+	friend struct FClassPickerGraphPinUtils;
 	bool SetMetaInfo(UEdGraphPin* InGraphPinObj);
 
 	// Called when a new class was picked via the asset picker

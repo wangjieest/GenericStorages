@@ -31,7 +31,7 @@ GENERICSTORAGES_API void CallOnEditorMapOpendImpl(TDelegate<void(UWorld*)> Deleg
 
 GENERICSTORAGES_API FTimerManager* GetTimerManager(UWorld* InWorld);
 GENERICSTORAGES_API bool SetTimer(FTimerHandle& InOutHandle,UWorld* InWorld, FTimerDelegate const& InDelegate, float InRate, bool InbLoop, float InFirstDelay = -1.f);
-GENERICSTORAGES_API UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class);
+GENERICSTORAGES_API UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, UObject*& OutCtx);
 }  // namespace GenericStorages
 
 template<typename F>

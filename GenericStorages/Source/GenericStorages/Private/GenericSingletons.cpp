@@ -281,9 +281,26 @@ bool SetTimer(FTimerHandle& InOutHandle, UWorld* InWorld, FTimerDelegate const& 
 UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, UObject*& OutCtx)
 {
 	FName InstName = FName(*FString::Printf(TEXT("GSOne_%s"), *GetNameSafe(Class)));
+#if WITH_EDITOR
+	bool bAsSignleton = false;
+	if (Class)
+	{
+		for (auto Cls = Class; Cls; Cls = Class->GetSuperClass())
+		{
+			if (Cls->HasMetaData(TEXT("AsSingleton")))
+			{
+				bAsSignleton = true;
+				break;
+			}
+		}
+	}
+	if (!bAsSignleton)
+	{
+		UE_LOG(LogGenericStorages, Warning, TEXT("Class:{%s} as singleton which need 'AsSingleton' Meta"), *GetNameSafe(Class));
+	}
+#endif
 	return GenericStorages::CreateInstanceImpl(WorldContextObject, {Class, InstName}, &OutCtx);
 }
-
 }  // namespace GenericStorages
 
 namespace WorldLocalStorages
@@ -637,7 +654,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 	// skip cook and CDOs
 	if (IsGarbageCollecting() || IsRunningCommandlet() || Object->HasAnyFlags(RF_ClassDefaultObject))
 	{
-		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::RegisterAsSingleton Warning : %s"), *GetPathNameSafe(Object));
+		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::RegisterAsSingleton Skip : %s"), *GetPathNameSafe(Object));
 		return nullptr;
 	}
 	
@@ -653,19 +670,19 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 #if !UE_BUILD_SHIPPING
 		UE_LOG(LogGenericStorages,
 			   Verbose,
-			   TEXT("GenericSingletons::RegisterAsSingleton %s %s(%p) -> %s(%p) -> %s(%p)"),
+			   TEXT("GenericSingletons::RegisterAsSingleton %s %s(%p) -> %s(%p) for %s(%p)"),
 			   bExisted ? TEXT("Existed") : TEXT("Replaced"),
 			   *GetTypedNameSafe(SingletonCtx),
 			   SingletonCtx,
-			   *GetTypedNameSafe(ObjCls),
-			   ObjCls,
 			   *GetTypedNameSafe(Ref),
-			   Ref);
+			   Ref,
+			   *GetTypedNameSafe(ObjCls),
+			   ObjCls);
 #endif
 		return Ref;
 	}
 
-	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterReplacing  %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterReplacing %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
 
 	UObject* LastPtr = nullptr;
 	for (auto CurClass = ObjCls; CurClass; CurClass = CurClass->GetSuperClass())
@@ -680,7 +697,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 		{
 			RefPtr = Object;
 #if !UE_BUILD_SHIPPING
-			UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(CurClass), CurClass, *GetTypedNameSafe(RefPtr), RefPtr);
+			UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(RefPtr), RefPtr, *GetTypedNameSafe(CurClass), CurClass);
 #endif
 		}
 
@@ -702,7 +719,7 @@ bool UGenericSingletons::UnregisterSingletonImpl(UObject* Object, const UObject*
 	// skip cook and CDOs
 	if (IsGarbageCollecting() || IsRunningCommandlet() || Object->HasAnyFlags(RF_ClassDefaultObject))
 	{
-		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::UnregisterSingleton Warning : %s"), *GetPathNameSafe(Object));
+		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::UnregisterSingleton Skip : %s"), *GetPathNameSafe(Object));
 		return false;
 	}
 
@@ -710,7 +727,7 @@ bool UGenericSingletons::UnregisterSingletonImpl(UObject* Object, const UObject*
 	UObject* SingletonCtx = GenericStorages::GetSingletonCtxObject(WorldContextObject);
 	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx);
 	auto ObjectClass = Object->GetClass();
-	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
 
 	UObject* LastPtr = nullptr;
 	for (auto CurClass = ObjectClass; CurClass && (InBaseClass || !CurClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Native)); CurClass = CurClass->GetSuperClass())
@@ -777,7 +794,7 @@ UObject* UGenericSingletons::GetSingletonInternal(UClass* SubClass, const UObjec
 		UObject* Ctx = SingletonCtx;
 		Ptr = GenericStorages::CreateSingletonImpl(WorldContextObject, SubClass, Ctx);
 #if !UE_BUILD_SHIPPING
-		UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateNewSingleton  %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(SubClass), SubClass, *GetTypedNameSafe(Ptr), Ptr);
+		UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateNewSingleton %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(Ctx), Ctx, *GetTypedNameSafe(Ptr), Ptr, *GetTypedNameSafe(SubClass), SubClass);
 #endif
 		if (ensureAlways(IsValid(Ptr)))
 		{
@@ -797,16 +814,16 @@ UObject* UGenericSingletons::GetSingletonInternal(UClass* SubClass, const UObjec
 UObject* UGenericSingletons::CreateInstanceImpl(const UObject* WorldContextObject, const FObjConstructParameter& Parameter)
 {
 	check(Parameter.Class);
-	if (!ensureAlwaysMsgf(!IsGarbageCollecting(), TEXT("CreateInstance when IsGarbageCollecting Ctx:%s Class:%s"), *GetNameSafe(WorldContextObject), *GetNameSafe(Parameter.Class)))
+	UClass* Cls = Parameter.Class;
+	if (!ensureAlwaysMsgf(!IsGarbageCollecting(), TEXT("CreateInstance when IsGarbageCollecting Ctx:%s Class:%s"), *GetNameSafe(WorldContextObject), *GetNameSafe(Cls)))
 	{
 		return nullptr;
 	}
-
+	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	UObject* Ptr = GenericStorages::CreateInstanceImpl(WorldContextObject, Parameter);
 
 #if !UE_BUILD_SHIPPING
-	auto World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
-	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateInstanceImpl %s(%p) -> %s(%p) -> %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Parameter.Class), Parameter.Class, *GetTypedNameSafe(Ptr), Ptr);
+	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::CreateInstanceImpl %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(World), World, *GetTypedNameSafe(Ptr), Ptr, *GetTypedNameSafe(Cls), Cls);
 #endif
 	return Ptr;
 }
