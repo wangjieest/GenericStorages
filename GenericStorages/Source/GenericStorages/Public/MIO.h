@@ -84,8 +84,8 @@ GENERICSTORAGES_API void CloseLockHandle(void* InHandle);
 
 struct FProcessLockIndex
 {
-	int64 Index;
-
+	int32 Index;
+	int32 PIEIndex;
 	FString AsSuffix(const FString& Prefix = TEXT("_")) const
 	{
 		if (!Index)
@@ -94,4 +94,5 @@ struct FProcessLockIndex
 	}
 };
 GENERICSTORAGES_API TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int64 MaxTries = 1024);
+GENERICSTORAGES_API TSharedPtr<FProcessLockIndex> GetGameInstanceIndexHandle(const UObject* InCtx, const TCHAR* Key = nullptr, int64 MaxTries = 1024);
 }  // namespace MIO

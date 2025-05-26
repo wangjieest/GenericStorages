@@ -53,7 +53,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 			return World;
 		};
 
-		FWorldContext* WorldContext = GEngine->GetWorldContextFromPIEInstance(FMath::Max(0, (int32)GPlayInEditorID));
+		FWorldContext* WorldContext = GEngine->GetWorldContextFromPIEInstance(FMath::Max(0, UE::GetPlayInEditorID()));
 		if (WorldContext && ensure(WorldContext->WorldType == EWorldType::PIE /* || WorldContext->WorldType == EWorldType::Game*/))
 		{
 			World = WorldContext->World();
@@ -285,7 +285,7 @@ UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, U
 	bool bAsSignleton = false;
 	if (Class)
 	{
-		for (auto Cls = Class; Cls; Cls = Class->GetSuperClass())
+		for (auto Cls = Class; Cls != UObject::StaticClass(); Cls = Class->GetSuperClass())
 		{
 			if (Cls->HasMetaData(TEXT("AsSingleton")))
 			{

@@ -313,8 +313,7 @@ template<typename T, uint8 N, typename P>
 struct TGenericLocalStorage<T, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && !TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
 {
 public:
-	template<typename... TArgs>
-	T& GetLocalValue(const UObject* WorldContextObj, TArgs&&... Args)
+	T& GetLocalValue(const UObject* WorldContextObj)
 	{
 		auto Ctx = P::GetCtx(WorldContextObj);
 		check(!Ctx || IsValid(Ctx));
@@ -322,14 +321,45 @@ public:
 		if (!Ptr.IsValid())
 		{
 			auto Obj = NewObject<UGenericLocalStore>();
-			auto SP = MakeShared<T>(Forward<TArgs>(Args)...);
+			TSharedRef<T> SP = MakeShared<T>();
 			Ptr = SP;
 			FLocalStorageOps::BindObjectReference(Ctx, Obj, SP);
 			return *SP;
 		}
 		return *Ptr.Pin();
 	}
-
+	template<typename TArg, typename... TArgs>
+	std::enable_if_t<!std::is_invocable_r<T*, TArg>::value, T&> GetLocalValue(const UObject* WorldContextObj, TArg&& Arg, TArgs&&... Args)
+	{
+		auto Ctx = P::GetCtx(WorldContextObj);
+		check(!Ctx || IsValid(Ctx));
+		auto& Ptr = FLocalStorageOps::FindOrAdd(GetStorage(Ctx), Ctx);
+		if (!Ptr.IsValid())
+		{
+			auto Obj = NewObject<UGenericLocalStore>();
+			TSharedRef<T> SP = MakeShared<T>(Forward<TArg>(Arg), Forward<TArgs>(Args)...);
+			Ptr = SP;
+			FLocalStorageOps::BindObjectReference(Ctx, Obj, SP);
+			return *SP;
+		}
+		return *Ptr.Pin();
+	}
+	template<typename F>
+	std::enable_if_t<std::is_invocable_r<T*, F>::value, T&> GetLocalValue(const UObject* WorldContextObj, const F& Ctor)
+	{
+		auto Ctx = P::GetCtx(WorldContextObj);
+		check(!Ctx || IsValid(Ctx));
+		auto& Ptr = FLocalStorageOps::FindOrAdd(GetStorage(Ctx), Ctx);
+		if (!Ptr.IsValid())
+		{
+			auto Obj = NewObject<UGenericLocalStore>();
+			TSharedRef<T> SP = MakeShareable<T>(Ctor());
+			Ptr = SP;
+			FLocalStorageOps::BindObjectReference(Ctx, Obj, SP);
+			return *SP;
+		}
+		return *Ptr.Pin();
+	}
 	void RemoveLocalValue(const UObject* WorldContextObj)
 	{
 		auto Ctx = P::GetCtx(WorldContextObj);
@@ -359,17 +389,42 @@ template<typename T, uint8 N, typename P>
 struct TGenericLocalStorage<T, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
 {
 public:
-	template<typename... U>
-	T& GetLocalValue(const UObject* WorldContextObj, U&&... Val)
+	T& GetLocalValue(const UObject* WorldContextObj)
 	{
-		static_assert(TIsPODType<T>::Value, "err");
 		auto Ctx = P::GetCtx(WorldContextObj);
 		check(!Ctx || IsValid(Ctx));
 		auto& StorageRef = GetStorage(Ctx);
 		return FLocalStorageOps::FindOrAdd(StorageRef, Ctx, [&]() -> T& {
 			auto& Ref = Add_GetRef(StorageRef);
 			Ref.WeakCtx = Ctx;
-			Ref.Value = T(Forward<U>(Val)...);
+			// Ref.Value = T();
+			return Ref.Value;
+		});
+	}
+
+	template<typename TArg, typename... TArgs>
+	std::enable_if_t<!std::is_invocable_r<T*, TArg>::value, T&> GetLocalValue(const UObject* WorldContextObj, TArg&& Arg, TArgs&&... Args)
+	{
+		auto Ctx = P::GetCtx(WorldContextObj);
+		check(!Ctx || IsValid(Ctx));
+		auto& StorageRef = GetStorage(Ctx);
+		return FLocalStorageOps::FindOrAdd(StorageRef, Ctx, [&]() -> T& {
+			auto& Ref = Add_GetRef(StorageRef);
+			Ref.WeakCtx = Ctx;
+			Ref.Value = T(Forward<TArg>(Arg), Forward<TArgs>(Args)...);
+			return Ref.Value;
+		});
+	}
+	template<typename F>
+	std::enable_if_t<std::is_invocable_r<T*, F>::value, T&> GetLocalValue(const UObject* WorldContextObj, const F& Ctor)
+	{
+		auto Ctx = P::GetCtx(WorldContextObj);
+		check(!Ctx || IsValid(Ctx));
+		auto& StorageRef = GetStorage(Ctx);
+		return FLocalStorageOps::FindOrAdd(StorageRef, Ctx, [&]() -> T& {
+			auto& Ref = Add_GetRef(StorageRef);
+			Ref.WeakCtx = Ctx;
+			Ref.Value = Ctor();
 			return Ref.Value;
 		});
 	}
@@ -459,7 +514,7 @@ namespace Internal
 	template<typename T>
 	WorldLocalStorages::TGenericPieLocalStorage<T> GlobalPieLocalStorage;
 }  // namespace Internal
-	
+
 template<typename T, typename... TArgs>
 decltype(auto) GetPieLocalValue(const UObject* Context, TArgs&&... Args)
 {
@@ -487,4 +542,4 @@ decltype(auto) GetCurrentGameValue(TArgs&&... Args)
 	return Internal::GlobalGameStorage<T>.GetLocalValue(UGenericLocalStore::GetGameWorldChecked(), Forward<TArgs>(Args)...);
 }
 
-}  // namespace GenericStorages
+}  // namespace GenericLocalStorages
