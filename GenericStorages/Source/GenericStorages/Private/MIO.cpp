@@ -16,7 +16,10 @@
 extern FString AndroidRelativeToAbsolutePath(bool bUseInternalBasePath, FString RelPath);
 #endif
 
-namespace GenericStorages { UGameInstance* FindGameInstance(UObject* InObj); }
+namespace GenericStorages
+{
+UGameInstance* FindGameInstance(UObject* InObj);
+}
 namespace MIO
 {
 template<typename ByteT, typename MapType = std::conditional_t<std::is_const<ByteT>::value, mio::ummap_source, mio::ummap_sink>>
@@ -146,30 +149,33 @@ void CloseLockHandle(void* InHandle)
 		mio::CloseLockHandle(InHandle);
 }
 
-TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int64 MaxTries)
+struct FProcessLockIndexImpl : public FProcessLockIndex
 {
-	struct FProcessLockIndexImpl : public FProcessLockIndex
+	void* Handle = nullptr;
+	FProcessLockIndexImpl(void* InHandle, int32 Idx, int32 PIEInstance = 0)
+		: Handle(InHandle)
 	{
-		void* Handle = nullptr;
-		FProcessLockIndexImpl(int32 Idx, void* InHandle)
-			: Handle(InHandle)
-		{
-			PIEIndex = 0;
-			Index = Idx;
-		}
-		~FProcessLockIndexImpl()
-		{
-			if (Handle)
-				CloseLockHandle(Handle);
-		}
-	};
+		PIEIndex = PIEInstance;
+		Index = Idx;
+	}
+	~FProcessLockIndexImpl()
+	{
+		if (Handle)
+			CloseLockHandle(Handle);
+	}
+};
 
+template<bool bFromCmd = true>
+bool GetGlobalSystemIndexHandleImpl(void*& OutHandle, int32& OutIndex, const TCHAR* Key, int32 MaxTries = 1024)
+{
 	int64 StartIndex = 0;
-
-	if (FCommandLine::IsInitialized())
+	if constexpr (bFromCmd)
 	{
-		FParse::Value(FCommandLine::Get(), TEXT("-GlobalSystemIndex="), StartIndex);
-		StartIndex = FMath::Max(int64(0), StartIndex);
+		if (FCommandLine::IsInitialized())
+		{
+			FParse::Value(FCommandLine::Get(), TEXT("-GlobalSystemIndex="), StartIndex);
+			StartIndex = FMath::Max(int64(0), StartIndex);
+		}
 	}
 
 	auto LockDir = FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(), FString::Printf(TEXT(".indexlock"))));
@@ -179,32 +185,56 @@ TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int64
 		FString TestFileName = FString::Printf(TEXT("%s%s"), Key ? Key : TEXT("_GlobalIndex_"), *LexToString(Index));
 		if (auto Handle = MIO::OpenLockHandle(*FPaths::Combine(LockDir, FString::Printf(TEXT("%s.lock"), *TestFileName)), ErrorMsg))
 		{
-			return MakeShared<FProcessLockIndexImpl>(Index, Handle);
+			OutIndex = Index;
+			OutHandle = Handle;
+			return true;
 		}
 	}
 	ensureMsgf(false, TEXT("Failed for GetGlobalSystemIndexHandle(%s, %s)"), Key ? Key : TEXT("_GlobalIndex_"), *LexToString(MaxTries));
-	return nullptr;
+	return false;
 }
 
-TSharedPtr<FProcessLockIndex> GetGameInstanceIndexHandle(const UObject* InCtx, const TCHAR* Key, int64 MaxTries /*= 1024*/)
+int32 GetProcessUniqueIndex()
 {
-	struct FLockIndexContainer
-	{
-		TSharedPtr<MIO::FProcessLockIndex> Ptr;
-		FLockIndexContainer(TSharedPtr<MIO::FProcessLockIndex>&& In):Ptr(MoveTemp(In)){}
-	};
-	static WorldLocalStorages::TGenericGameLocalStorage<FLockIndexContainer> Containers;
-	UGameInstance* Ins = GenericStorages::FindGameInstance((UObject*)InCtx);
-	auto Lambda = [&] {
-		auto Handle = GetGlobalSystemIndexHandle(Key ? Key : TEXT("_GameIns_"));
-#if WITH_EDITOR
-		Handle->PIEIndex = Ins ? Ins->GetWorldContext()->PIEInstance : UE::GetPlayInEditorID();
-#endif
-		return new FLockIndexContainer(MoveTemp(Handle));
-	};
-	auto Ret = Containers.GetLocalValue(Ins, Lambda).Ptr;
+	static TSharedPtr<FProcessLockIndexImpl> ProcessUniqueLock;
+	if (ProcessUniqueLock)
+		return ProcessUniqueLock->Index;
 
-	return Ret;
+	void* Handle = nullptr;
+	int32 Index = 0;
+	if (GetGlobalSystemIndexHandleImpl<false>(Handle, Index, TEXT("_ProcessUniqueIndex_")))
+	{
+		ProcessUniqueLock = MakeShared<FProcessLockIndexImpl>(Handle, Index);
+	}
+	return Index;
+}
+
+TSharedPtr<FProcessLockIndex> GetGlobalSystemIndexHandle(const TCHAR* Key, int32 MaxTries)
+{
+	void* Handle = nullptr;
+	int32 Index = 0;
+	if (GetGlobalSystemIndexHandleImpl(Handle, Index, Key, MaxTries))
+	{
+		return MakeShared<FProcessLockIndexImpl>(Handle, Index);
+	}
+	return nullptr;
+}
+FProcessLockIndex* GetGameInstanceIndexHandle(const UObject* InCtx, const TCHAR* Key, int32 MaxTries /*= 1024*/)
+{
+	static WorldLocalStorages::TGenericGameLocalStorage<FProcessLockIndexImpl> Containers;
+	UGameInstance* Ins = GenericStorages::FindGameInstance((UObject*)InCtx);
+	void* Handle = nullptr;
+	int32 Index = 0;
+	if (Key)
+	{
+		GetGlobalSystemIndexHandleImpl(Handle, Index, Key, MaxTries);
+	}
+	else
+	{
+		Index = GetProcessUniqueIndex();
+	}
+	auto Lambda = [&] { return new FProcessLockIndexImpl(Handle, Index, Ins ? Ins->GetWorldContext()->PIEInstance : UE::GetPlayInEditorID()); };
+	return &Containers.GetLocalValue(Ins, Lambda);
 }
 
 FString ConvertToAbsolutePath(FString InPath)
@@ -367,4 +397,3 @@ uint8* FMappedBuffer::GetPtr() const
 }
 
 }  // namespace MIO
-
