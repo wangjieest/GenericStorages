@@ -285,7 +285,7 @@ UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, U
 	bool bAsSignleton = false;
 	if (Class)
 	{
-		for (auto Cls = Class; Cls != UObject::StaticClass(); Cls = Class->GetSuperClass())
+		for (auto Cls = Class; Cls != UObject::StaticClass(); Cls = Cls->GetSuperClass())
 		{
 			if (Cls->HasMetaData(TEXT("AsSingleton")))
 			{

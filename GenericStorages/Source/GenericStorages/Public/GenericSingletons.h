@@ -191,7 +191,7 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingleton", WorldContext = "Ctx", DeterminesOutputType = "Class", DynamicOutputParam))
 	static UObject* K2_GetSingleton(UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true);
 
-	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingletonEx", WorldContext = "Ctx", AdvancedDisplay = "RegClass,bValid", DeterminesOutputType = "Class", DynamicOutputParam))
+	UFUNCTION(BlueprintCallable, Category = "Game|GMP", meta = (DisplayName = "GetGMPSingletonEx", WorldContext = "Ctx", AdvancedDisplay = "RegClass,bIsValid", DeterminesOutputType = "Class", DynamicOutputParam))
 	static UObject* K2_GetSingletonEx(bool& bIsValid, UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
 	{
 		UObject* Ret = nullptr;
@@ -208,14 +208,18 @@ protected:
 	}
 
 	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureGetSingleton", WorldContext = "Ctx", AdvancedDisplay = "RegClass", DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* GetSingletonImplPure(UClass* Class, const UObject* Ctx = nullptr, bool bCreate = true, UClass* RegClass = nullptr)
+	static UObject* GetSingletonImplPure(UClass* Class, const UObject* Ctx, bool bCreate = true, UClass* RegClass = nullptr)
 	{
 		bool bIsValid = false;
 		return K2_GetSingletonEx(bIsValid, Class, Ctx, bCreate, RegClass);
 	}
 
-	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", CallableWithoutWorldContext, DeterminesOutputType = "Class", DynamicOutputParam))
-	static UObject* PureInstanceSingleton(UClass* Class, bool bCreate = true) { return K2_GetSingleton(Class, nullptr, bCreate); }
+	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", CallableWithoutWorldContext, DeterminesOutputType = "Class", DynamicOutputParam = "Singleton", AdvancedDisplay = "bValid"))
+	static void PureInstanceSingleton(UClass* Class, UObject*& Singleton, bool& bValid, bool bCreate = true)
+	{
+		Singleton = K2_GetSingleton(Class, nullptr, bCreate);
+		bValid = !!Singleton;
+	}
 
 public:  // C++
 	FORCEINLINE static UObject* FindSingleton(UClass* Class, const UObject* WorldContextObject) { return GetSingletonInternal(Class, WorldContextObject, false); }

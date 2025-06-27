@@ -88,8 +88,6 @@ struct FProcessLockIndex
 	int32 PIEIndex;
 	FString AsSuffix(const FString& Prefix = TEXT("_")) const
 	{
-		if (!Index)
-			return TEXT("");
 		return Prefix + LexToString(Index);
 	}
 };
