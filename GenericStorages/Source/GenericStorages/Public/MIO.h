@@ -23,17 +23,13 @@ public:
 
 GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<uint8>> OpenMappedWrite(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = MAX_int64, bool bPreloadHint = false);
 GENERICSTORAGES_API TUniquePtr<IMappedFileRegion<const uint8>> OpenMappedRead(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = 0, bool bPreloadHint = false);
-GENERICSTORAGES_API bool ChunkingFile(const TCHAR* Filename, TArray64<uint8>& Buffer, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda);
 GENERICSTORAGES_API FString ConvertToAbsolutePath(FString InOutPath);
 GENERICSTORAGES_API int32 ReadLines(const TCHAR* Filename, const TFunctionRef<void(const TArray<uint8>&)>& Lambda, char Dim = '\n');
 GENERICSTORAGES_API int32 WriteLines(const TCHAR* Filename, const TArray<TArray<uint8>>& Lines, char Dim = '\n');
+GENERICSTORAGES_API bool SetFileSize(const TCHAR* Filename, int64 NewSize, bool bAllowShrink = true);
+GENERICSTORAGES_API  bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(TArrayView<const uint8>)>& Lambda, int32 InSize = 4096);
+GENERICSTORAGES_API FString GetFileHash(const TCHAR* Filename, const FString& HashType = TEXT("md5"));
 
-inline bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda, int32 InSize = 2048)
-{
-	TArray64<uint8> Buffer;
-	Buffer.SetNumUninitialized(InSize);
-	return ChunkingFile(Filename, Buffer, Lambda);
-}
 
 class GENERICSTORAGES_API FMappedBuffer
 {

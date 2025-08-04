@@ -1,18 +1,16 @@
 #include "MIO.h"
 
 #include "Containers/UnrealString.h"
-
-#if PLATFORM_ANDROID
-#include "Android/AndroidPlatformMisc.h"
-#endif
-
 #include "GenericStoragesLog.h"
 #include "HAL/FileManager.h"
 #include "mio/mmap.hpp"
 #include "WorldLocalStorages.h"
 #include "UnrealCompatibility.h"
+#include "HAL/PlatformFileManager.h"
+#include "Misc/SecureHash.h"
 
 #if PLATFORM_ANDROID
+#include "Android/AndroidPlatformMisc.h"
 extern FString AndroidRelativeToAbsolutePath(bool bUseInternalBasePath, FString RelPath);
 #endif
 
@@ -22,16 +20,42 @@ UGameInstance* FindGameInstance(UObject* InObj);
 }
 namespace MIO
 {
+FString ConvertToAbsolutePath(FString InPath)
+{
+#if PLATFORM_IOS || PLATFORM_ANDROID
+	InPath = IFileManager::Get().ConvertToAbsolutePathForExternalAppForWrite(*InPath);
+#elif PLATFORM_ANDROID
+	InPath = AndroidRelativeToAbsolutePath(false, InPath);
+#elif PLATFORM_WINDOWS
+#else
+#endif
+	InPath = FPaths::ConvertRelativePathToFull(InPath);
+	return InPath;
+}
+
+const FString& FullProjectSavedDir()
+{
+	static FString FullSavedDirPath = [] {
+#if UE_BUILD_SHIPPING
+		FString ProjSavedDir = FPaths::ProjectDir() / TEXT("Saved/");
+#else
+		FString ProjSavedDir = FPaths::ProjectSavedDir();
+#endif
+		return ConvertToAbsolutePath(ProjSavedDir);
+	}();
+	return FullSavedDirPath;
+}
+
 template<typename ByteT, typename MapType = std::conditional_t<std::is_const<ByteT>::value, mio::ummap_source, mio::ummap_sink>>
 class FMappedFileRegionImpl final
 	: public IMappedFileRegion<ByteT>
 	, private MapType
 {
 	static_assert(sizeof(ByteT) == sizeof(char), "err");
-	FString FileInfo;
+	FString AbsolutePath;
 
 public:
-	virtual FString& GetInfo() override { return FileInfo; }
+	virtual FString& GetInfo() override { return AbsolutePath; }
 	virtual ByteT* GetMappedPtr() override { return MapType::data(); }
 	virtual int64 GetMappedSize() override { return MapType::mapped_length(); }
 
@@ -39,12 +63,11 @@ public:
 	FMappedFileRegionImpl(const TCHAR* Filename, int64 Offset = 0, int64 BytesToMap = MAX_int64, bool bPreloadHint = false)
 	{
 		std::error_code ErrCode;
-		FileInfo = Filename;
-		MapType::map(Filename, Offset, BytesToMap, ErrCode);
-
+		AbsolutePath = ConvertToAbsolutePath(Filename);
+		MapType::map(*AbsolutePath, Offset, BytesToMap, ErrCode);
 		if (ErrCode)
 		{
-			UE_LOG(LogGenericStorages, Error, TEXT("OpenMapped Error : [%s] %d(%s)"), Filename, ErrCode.value(), ANSI_TO_TCHAR(ErrCode.message().c_str()));
+			UE_LOG(LogGenericStorages, Error, TEXT("OpenMapped Error : [%s] %d(%s)"), *AbsolutePath, ErrCode.value(), ANSI_TO_TCHAR(ErrCode.message().c_str()));
 		}
 	}
 };
@@ -115,33 +138,84 @@ int32 WriteLines(const TCHAR* Filename, const TArray<TArray<uint8>>& Lines, char
 	return LineCount;
 }
 
-bool ChunkingFile(const TCHAR* Filename, TArray64<uint8>& Buffer, const TFunctionRef<void(const TArray64<uint8>&)>& Lambda)
+bool SetFileSize(const TCHAR* Filename, int64 NewSize, bool bAllowShrink)
 {
-	check(Filename);
-	if (!Buffer.Num())
-		Buffer.SetNumUninitialized(2048);
+	auto AbsolutePath = ConvertToAbsolutePath(Filename);
+	auto errcode = mio::set_file_size(*AbsolutePath, static_cast<uint32>(NewSize), bAllowShrink);
+	return !errcode;
+}
 
-	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(Filename));
-	if (ensure(Reader))
+bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(TArrayView<const uint8>)>& Lambda, int32 InSize)
+{
+	std::error_code error_code;
+	auto AbsolutePath = ConvertToAbsolutePath(Filename);
+	auto handle = mio::detail::open_file(*AbsolutePath, mio::access_mode::read, error_code);
+	if (error_code)
 	{
-		int64 LeftSize = Reader->TotalSize();
-		while (LeftSize > 0)
-		{
-			auto ActualSize = LeftSize > Buffer.Num() ? Buffer.Num() : LeftSize;
-			Buffer.SetNumUninitialized(ActualSize, false);
-			Reader->Serialize(Buffer.GetData(), ActualSize);
-			Lambda(Buffer);
-			LeftSize -= ActualSize;
-		}
-		return true;
+		UE_LOG(LogGenericStorages, Error, TEXT("Failed to map file: %s"), *AbsolutePath);
+		return false;
 	}
-	return false;
+	ON_SCOPE_EXIT{mio::close_file_handle(handle);};
+	mio::ummap_source map_source;
+	auto file_size = mio::detail::query_file_size(handle, error_code);
+	if (error_code)
+	{
+		UE_LOG(LogGenericStorages, Error, TEXT("Failed to query file size: %s"), *AbsolutePath);
+		return false;
+	}
+	decltype(file_size) offset = 0;
+	for (; offset < file_size; offset += InSize)
+	{
+		auto size_to_read = FMath::Min<decltype(file_size)>(file_size - offset, InSize);
+		if (size_to_read > 0)
+		{
+			map_source.map(handle, offset, size_to_read, error_code);
+			ON_SCOPE_EXIT{map_source.unmap();};
+			if (error_code)
+			{
+				UE_LOG(LogGenericStorages, Error, TEXT("Failed to map file region: %lld-%lld %s"), offset, size_to_read, Filename);
+				return false;
+			}
+			Lambda(TArrayView<const uint8>(map_source.data(), size_to_read));
+		}
+	}
+	return true;
+}
+FString GetFileHash(const TCHAR* Filename, const FString& HashType)
+{
+	if (HashType == TEXT("md5"))
+	{
+		FMD5 MD5Context;
+		bool bSucc = ChunkingFile(Filename, [&](TArrayView<const uint8> Data) { MD5Context.Update(Data.GetData(), Data.Num()); }, 4 * 1024 * 1024);
+		if (bSucc)
+		{
+			uint8 Digest[16];
+			MD5Context.Final(Digest);
+			FString MD5;
+			for (int32 i = 0; i < 16; i++)
+			{
+				MD5 += FString::Printf(TEXT("%02x"), Digest[i]);
+			}
+			return MD5;
+		}
+	}
+	else if (HashType == TEXT("sha1"))
+	{
+		FSHA1 SHA1Context;
+		bool bSucc = ChunkingFile(Filename, [&](TArrayView<const uint8> Data) { SHA1Context.Update(Data.GetData(), Data.Num()); }, 4 * 1024 * 1024);
+		if (bSucc)
+		{
+			return SHA1Context.Finalize().ToString();
+		}
+	}
+	return TEXT("");
 }
 
 void* OpenLockHandle(const TCHAR* Path, FString& ErrorCategory)
 {
-	ensure(FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*FPaths::GetPath(Path)));
-	return mio::OpenLockHandle(Path, ErrorCategory);
+	auto AbsolutePath = ConvertToAbsolutePath(Path);
+	ensure(FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*FPaths::GetPath(AbsolutePath)));
+	return mio::OpenLockHandle(*AbsolutePath, ErrorCategory);
 }
 void CloseLockHandle(void* InHandle)
 {
@@ -235,32 +309,6 @@ FProcessLockIndex* GetGameInstanceIndexHandle(const UObject* InCtx, const TCHAR*
 	}
 	auto Lambda = [&] { return new FProcessLockIndexImpl(Handle, Index, Ins ? Ins->GetWorldContext()->PIEInstance : UE::GetPlayInEditorID()); };
 	return &Containers.GetLocalValue(Ins, Lambda);
-}
-
-FString ConvertToAbsolutePath(FString InPath)
-{
-#if PLATFORM_IOS
-	InPath = IFileManager::Get().ConvertToAbsolutePathForExternalAppForWrite(*InPath);
-#elif PLATFORM_ANDROID
-	InPath = AndroidRelativeToAbsolutePath(false, InPath);
-#elif PLATFORM_WINDOWS
-#else
-#endif
-	InPath = FPaths::ConvertRelativePathToFull(InPath);
-	return InPath;
-}
-
-const FString& FullProjectSavedDir()
-{
-	static FString FullSavedDirPath = [] {
-#if UE_BUILD_SHIPPING
-		FString ProjSavedDir = FPaths::ProjectDir() / TEXT("Saved/");
-#else
-		FString ProjSavedDir = FPaths::ProjectSavedDir();
-#endif
-		return ConvertToAbsolutePath(ProjSavedDir);
-	}();
-	return FullSavedDirPath;
 }
 
 FMappedBuffer::FMappedBuffer(FGuid InId, uint32 InCapacity, const TCHAR* SubDir)

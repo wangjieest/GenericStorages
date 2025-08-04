@@ -11,7 +11,8 @@ public class GenericStorages : ModuleRules
 		PublicIncludePaths.AddRange(new string[]{
 			ModuleDirectory + "/Public",
 			ModuleDirectory + "/Template",
-            ModuleDirectory,
+			ModuleDirectory + "/Classes",
+			ModuleDirectory,
 			// ... add public include paths required here ...
 		});
 
@@ -22,6 +23,9 @@ public class GenericStorages : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]{
+			"StructUtils",
+			"HTTP",
+			"Json",
 			// ... add private dependencies that you statically link with here ...
 		});
 

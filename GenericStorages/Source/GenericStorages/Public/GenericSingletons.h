@@ -2,6 +2,7 @@
 
 #pragma once
 #include "CoreMinimal.h"
+#include "TimerManager.h"
 
 #include "Engine/EngineTypes.h"
 #include "Engine/World.h"

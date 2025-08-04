@@ -588,6 +588,31 @@ inline void CloseLockHandle(void* InHandle)
 }
 #endif
 
+void close_file_handle(file_handle_type handle) noexcept
+{
+#ifdef _WIN32
+	::CloseHandle(handle);
+#else // POSIX
+	::close(handle);
+#endif
+}
+
+template<typename String>
+std::error_code set_file_size(String path, uint32_t new_size, bool allow_shrink) noexcept
+{
+	std::error_code errcode;
+	auto handle = detail::open_file(path, access_mode::write, errcode);
+	if (!errcode)
+	{
+		auto old_size = detail::query_file_size(handle, errcode);
+		if (new_size != old_size && (allow_shrink || int64_t(new_size) < old_size))
+		{
+			errcode = detail::set_file_size(handle, new_size);
+		}
+		close_file_handle(handle);
+	}
+	return errcode;
+}
 } // namespace mio
 
 
