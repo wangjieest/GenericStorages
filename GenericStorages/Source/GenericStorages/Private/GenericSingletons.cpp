@@ -34,7 +34,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 {
 	auto World = GWorld;
 #if WITH_EDITOR
-	if (GIsEditor && !GIsPlayInEditorWorld)
+	if (!World && GIsEditor && !GIsPlayInEditorWorld)
 	{
 		static auto FindFirstPIEWorld = [] {
 			UWorld* World = nullptr;
@@ -77,11 +77,22 @@ UGameInstance* FindGameInstance(UObject* InObj)
 {
 	UGameInstance* Instance = nullptr;
 #if WITH_EDITOR
-	if (InObj && InObj->IsA<UGameInstance>())
+	if (InObj)
 	{
-		return CastChecked<UGameInstance>(InObj);
+		if (InObj->IsA<UGameInstance>())
+		{
+			Instance = CastChecked<UGameInstance>(InObj);
+		}
+		
+		if (auto World = GEngine->GetWorldFromContextObject(InObj, EGetWorldErrorMode::LogAndReturnNull))
+		{
+			Instance = World->GetGameInstance();
+		}
+
+		if(Instance)
+			return Instance;
 	}
-	
+
 	if (GIsEditor)
 	{
 		ensureAlwaysMsgf(!GIsInitialLoad && GEngine, TEXT("need to get singleton before engine initialized?"));
