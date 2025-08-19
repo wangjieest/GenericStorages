@@ -23,6 +23,8 @@ protected:
 	static bool HasCustomMeta(UEdGraphPin* InGraphPinObj, const TCHAR* MetaName, TSet<FString>* Out = nullptr);
 	virtual FReply OnClickUse() override;
 	virtual bool OnCanUseAssetData(const FAssetData& AssetData);
+	virtual EVisibility GetDefaultValueVisibility() const;
+	bool bHiddenDefaultValue = false;
 };
 
 // CustomClassPinPicker with MetaClass [AllowedClasses DisallowedClasses AllowAbstract MustImplement NotConnectable WithinMetaKey WithoutMetaKey]
@@ -76,6 +78,11 @@ public:
 	static bool IsMatchedToCreate(UEdGraphPin* InGraphPinObj);
 
 protected:
+	virtual const FAssetData& GetAssetData(bool bRuntimePath) const override;
+	mutable FAssetData CachedEditorAssetData;
+	TSharedPtr<class IClassViewerFilter> ClassFilter;
+
+	virtual TSharedRef<SWidget> GenerateAssetPicker() override;
 	bool SetMetaInfo(UEdGraphPin* InGraphPinObj);
 	TWeakObjectPtr<UClass> WeakMetaClass;
 };

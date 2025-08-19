@@ -242,12 +242,12 @@ protected:
 #endif
 };
 
-template<typename T, uint8 N = 4, typename P = TContextPolicy<UObject>, typename V = void>
+template<typename T, bool bGlobal = false, uint8 N = 4, typename P = TContextPolicy<UObject>, typename V = void>
 struct TGenericLocalStorage;
 
 // UObject
-template<typename T, uint8 N, typename P>
-struct TGenericLocalStorage<T, N, P, typename TEnableIf<TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public FLocalStorageOps
+template<typename T, bool bGlobal, uint8 N, typename P>
+struct TGenericLocalStorage<T, bGlobal, N, P, typename TEnableIf<TIsDerivedFrom<T, UObject>::IsDerived>::Type> : public FLocalStorageOps
 {
 public:
 	T* GetLocalValue(const UObject* WorldContextObj, bool bCreate = true)
@@ -295,22 +295,22 @@ protected:
 		TWeakObjectPtr<typename P::CtxType> WeakCtx;
 		TWeakObjectPtr<T> Value;
 	};
-
-#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
-	template<typename U>
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
-	{
-		return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
-	}
-#else
 	TArray<FStorePair, TInlineAllocator<N>> Storage;
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const UObject* WorldContextObj) { return Storage; }
+
+	template<typename U>
+	inline TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
+	{
+#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
+		if (bGlobal)
+			return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
 #endif
+		return Storage;
+	}
 };
 
 // Struct
-template<typename T, uint8 N, typename P>
-struct TGenericLocalStorage<T, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && !TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
+template<typename T, bool bGlobal, uint8 N, typename P>
+struct TGenericLocalStorage<T, bGlobal, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && !TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
 {
 public:
 	T& GetLocalValue(const UObject* WorldContextObj)
@@ -372,21 +372,22 @@ protected:
 		TWeakObjectPtr<typename P::CtxType> WeakCtx;
 		TWeakPtr<T> Value;
 	};
-#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
-	template<typename U>
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
-	{
-		return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
-	}
-#else
 	TArray<FStorePair, TInlineAllocator<N>> Storage;
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const UObject* WorldContextObj) { return Storage; }
+
+	template<typename U>
+	inline TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
+	{
+#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
+		if (bGlobal)
+			return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
 #endif
+		return Storage;
+	}
 };
 
 // PODs
-template<typename T, uint8 N, typename P>
-struct TGenericLocalStorage<T, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
+template<typename T, bool bGlobal, uint8 N, typename P>
+struct TGenericLocalStorage<T, bGlobal, N, P, typename TEnableIf<!TIsDerivedFrom<T, UObject>::IsDerived && TTraitsWorldLocalStoragePOD<T>::Value>::Type> : public FLocalStorageOps
 {
 public:
 	T& GetLocalValue(const UObject* WorldContextObj)
@@ -452,31 +453,37 @@ protected:
 		TWeakObjectPtr<typename P::CtxType> WeakCtx;
 		T Value;
 	};
-#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
-	template<typename U>
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
-	{
-		return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
-	}
-#else
 	TArray<FStorePair, TInlineAllocator<N>> Storage;
-	TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const UObject* WorldContextObj) { return Storage; }
+
+	template<typename U>
+	inline TArray<FStorePair, TInlineAllocator<N>>& GetStorage(const U* WorldContextObj)
+	{
+#if WITH_LOCALSTORAGE_MULTIMODULE_SUPPORT
+		if constexpr (bGlobal)
+		{
+			return FLocalStorageOps::GetStorage<TArray<FStorePair, TInlineAllocator<N>>, T>(WorldContextObj);
+		}
+		else
 #endif
+		{
+			return Storage;
+		}
+	}
 };
 //////////////////////////////////////////////////////////////////////////
-template<typename T, uint8 N = 4, typename P = TContextPolicy<UGameInstance>, typename V = void>
-using TGenericGameLocalStorage = TGenericLocalStorage<T, N, P, V>;
+template<typename T, uint8 N = 4, bool bGlobal = false, typename P = TContextPolicy<UGameInstance>, typename V = void>
+using TGenericGameLocalStorage = TGenericLocalStorage<T, bGlobal, N, P, V>;
 
-template<typename T, uint8 N = 4, typename P = TContextPolicy<UWorld>, typename V = void>
-using TGenericWorldLocalStorage = TGenericLocalStorage<T, N, P, V>;
+template<typename T, uint8 N = 4, bool bGlobal = false, typename P = TContextPolicy<UWorld>, typename V = void>
+using TGenericWorldLocalStorage = TGenericLocalStorage<T, bGlobal, N, P, V>;
 
-template<typename T, uint8 N = 4, typename P = UGenericLocalStore, typename V = void>
-using TGenericPieLocalStorage = WorldLocalStorages::TGenericLocalStorage<T, N, P, V>;
+template<typename T, uint8 N = 4, bool bGlobal = false, typename P = UGenericLocalStore, typename V = void>
+using TGenericPieLocalStorage = WorldLocalStorages::TGenericLocalStorage<T, bGlobal, N, P, V>;
 
 namespace Internal
 {
 	template<typename T>
-	TGenericWorldLocalStorage<T> GlobalWorldStorage;
+	TGenericWorldLocalStorage<T, 4, true> GlobalWorldStorage;
 }  // namespace Internal
 
 template<typename T, typename... TArgs>
@@ -508,11 +515,11 @@ namespace GenericLocalStorages
 namespace Internal
 {
 	template<typename T>
-	WorldLocalStorages::TGenericGameLocalStorage<T> GlobalGameStorage;
+	WorldLocalStorages::TGenericGameLocalStorage<T, 4, true> GlobalGameStorage;
 	//////////////////////////////////////////////////////////////////////////
 
 	template<typename T>
-	WorldLocalStorages::TGenericPieLocalStorage<T> GlobalPieLocalStorage;
+	WorldLocalStorages::TGenericPieLocalStorage<T, 4, true> GlobalPieLocalStorage;
 }  // namespace Internal
 
 template<typename T, typename... TArgs>

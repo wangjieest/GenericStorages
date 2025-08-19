@@ -23,12 +23,14 @@
 #include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
 #include "UObject/Object.h"
-#include"Misc/EngineVersionComparison.h"
+#include "Misc/EngineVersionComparison.h"
 #if UE_VERSION_NEWER_THAN(5, 1, -1)
 #include "Styling/AppStyle.h"
 #else
 #define FAppStyle FEditorStyle
 #endif
+#include "GraphEditAction.h"
+#include "ProtectFieldAccessor.h"
 
 #define LOCTEXT_NAMESPACE "ClassPikcerGraphPin"
 
@@ -83,6 +85,14 @@ bool SGraphPinObjectExtra::OnCanUseAssetData(const FAssetData& AssetData)
 	return true;
 }
 
+EVisibility SGraphPinObjectExtra::GetDefaultValueVisibility() const
+{
+	if (bHiddenDefaultValue)
+		return EVisibility::Collapsed;
+	else
+		return SGraphPin::GetDefaultValueVisibility();
+}
+
 bool SClassPickerGraphPin::IsMatchedToCreate(UEdGraphPin* InGraphPinObj)
 {
 	if (IsMatchedPinType(InGraphPinObj))
@@ -110,91 +120,25 @@ bool SClassPickerGraphPin::IsMatchedPinType(UEdGraphPin* InGraphPinObj)
 struct FClassPickerGraphPinUtils
 {
 	static bool GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowedClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp, TFunctionRef<void(const FProperty*)> Op)
-{
-	bool bAllowAbstract = false;
-	do
 	{
-		if (!InGraphPinObj)
-			break;
-
-		if (!ensure(BindProp || SClassPickerGraphPin::IsMatchedToCreate(InGraphPinObj)))
-			break;
-
-		if (BindProp)
+		bool bAllowAbstract = false;
+		do
 		{
-			Op(BindProp);
-
-			bAllowAbstract = BindProp->GetBoolMetaData(TEXT("AllowAbstract"));
-			ImplementClass = BindProp->GetClassMetaData(TEXT("MustImplement"));
-
-			auto FilterClass = Cast<const UClass>(InGraphPinObj->PinType.PinSubCategoryObject.Get());
-			auto MetaClass = BindProp->GetClassMetaData(TEXT("MetaClass"));
-			if (!FilterClass || (MetaClass && MetaClass->IsChildOf(FilterClass)))
-				FilterClass = MetaClass;
-
-			AllowedClasses.Empty();
-			if (FilterClass)
-			{
-				AllowedClasses.Add(FilterClass);
+			if (!InGraphPinObj)
 				break;
-			}
 
-			TArray<FString> AllowedClassNames;
-			BindProp->GetMetaData(TEXT("AllowedClasses")).ParseIntoArray(AllowedClassNames, TEXT(","), true);
-			if (AllowedClassNames.Num() > 0)
+			if (!ensure(BindProp || SClassPickerGraphPin::IsMatchedToCreate(InGraphPinObj)))
+				break;
+
+			if (BindProp)
 			{
-				for (const FString& ClassName : AllowedClassNames)
-				{
-#if UE_5_00_OR_LATER
-					UClass* AllowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
-#else
-					UClass* AllowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
-#endif
-					const bool bIsInterface = AllowedClass && AllowedClass->HasAnyClassFlags(CLASS_Interface);
-					if (AllowedClass && (!bIsInterface || (ImplementClass && AllowedClass->ImplementsInterface(ImplementClass))))
-					{
-						AllowedClasses.Add(AllowedClass);
-					}
-				}
-			}
-			TArray<FString> DisallowedClassNames;
-			BindProp->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
-			if (DisallowedClassNames.Num() > 0)
-			{
-				for (const FString& ClassName : DisallowedClassNames)
-				{
-#if UE_5_00_OR_LATER
-					UClass* DisallowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
-#else
-					UClass* DisallowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
-#endif
-					const bool bIsInterface = DisallowedClass && DisallowedClass->HasAnyClassFlags(CLASS_Interface);
-					if (DisallowedClass && (!bIsInterface || (ImplementClass && DisallowedClass->ImplementsInterface(ImplementClass))))
-					{
-						DisallowedClasses.Add(DisallowedClass);
-					}
-				}
-			}
-		}
+				Op(BindProp);
 
-		UK2Node_CallFunction* CallFuncNode = Cast<UK2Node_CallFunction>(InGraphPinObj->GetOwningNode());
-		if (!CallFuncNode)
-			break;
-
-		const UFunction* ThisFunction = CallFuncNode->GetTargetFunction();
-		if (!ThisFunction)
-			break;
-
-		for (TFieldIterator<FProperty> It(ThisFunction); It; ++It)
-		{
-			if ((It->HasAnyPropertyFlags(CPF_Parm) && It->GetFName() == ToName(InGraphPinObj->PinName)))
-			{
-				Op(*It);
-				bAllowAbstract = It->GetBoolMetaData(TEXT("AllowAbstract"));
-				ImplementClass = It->GetClassMetaData(TEXT("MustImplement"));
+				bAllowAbstract = BindProp->GetBoolMetaData(TEXT("AllowAbstract"));
+				ImplementClass = BindProp->GetClassMetaData(TEXT("MustImplement"));
 
 				auto FilterClass = Cast<const UClass>(InGraphPinObj->PinType.PinSubCategoryObject.Get());
-				auto MetaClass = It->GetClassMetaData(TEXT("MetaClass"));
+				auto MetaClass = BindProp->GetClassMetaData(TEXT("MetaClass"));
 				if (!FilterClass || (MetaClass && MetaClass->IsChildOf(FilterClass)))
 					FilterClass = MetaClass;
 
@@ -206,7 +150,7 @@ struct FClassPickerGraphPinUtils
 				}
 
 				TArray<FString> AllowedClassNames;
-				It->GetMetaData(TEXT("AllowedClasses")).ParseIntoArray(AllowedClassNames, TEXT(","), true);
+				BindProp->GetMetaData(TEXT("AllowedClasses")).ParseIntoArray(AllowedClassNames, TEXT(","), true);
 				if (AllowedClassNames.Num() > 0)
 				{
 					for (const FString& ClassName : AllowedClassNames)
@@ -224,7 +168,7 @@ struct FClassPickerGraphPinUtils
 					}
 				}
 				TArray<FString> DisallowedClassNames;
-				It->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
+				BindProp->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
 				if (DisallowedClassNames.Num() > 0)
 				{
 					for (const FString& ClassName : DisallowedClassNames)
@@ -241,16 +185,80 @@ struct FClassPickerGraphPinUtils
 						}
 					}
 				}
-				break;
 			}
-		}
 
-	} while (0);
-	return bAllowAbstract;
-}
+			UK2Node_CallFunction* CallFuncNode = Cast<UK2Node_CallFunction>(InGraphPinObj->GetOwningNode());
+			if (!CallFuncNode)
+				break;
+
+			const UFunction* ThisFunction = CallFuncNode->GetTargetFunction();
+			if (!ThisFunction)
+				break;
+
+			for (TFieldIterator<FProperty> It(ThisFunction); It; ++It)
+			{
+				if ((It->HasAnyPropertyFlags(CPF_Parm) && It->GetFName() == ToName(InGraphPinObj->PinName)))
+				{
+					Op(*It);
+					bAllowAbstract = It->GetBoolMetaData(TEXT("AllowAbstract"));
+					ImplementClass = It->GetClassMetaData(TEXT("MustImplement"));
+
+					auto FilterClass = Cast<const UClass>(InGraphPinObj->PinType.PinSubCategoryObject.Get());
+					auto MetaClass = It->GetClassMetaData(TEXT("MetaClass"));
+					if (!FilterClass || (MetaClass && MetaClass->IsChildOf(FilterClass)))
+						FilterClass = MetaClass;
+
+					AllowedClasses.Empty();
+					if (FilterClass)
+					{
+						AllowedClasses.Add(FilterClass);
+						break;
+					}
+
+					TArray<FString> AllowedClassNames;
+					It->GetMetaData(TEXT("AllowedClasses")).ParseIntoArray(AllowedClassNames, TEXT(","), true);
+					if (AllowedClassNames.Num() > 0)
+					{
+						for (const FString& ClassName : AllowedClassNames)
+						{
+#if UE_5_00_OR_LATER
+							UClass* AllowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
+							UClass* AllowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
+							const bool bIsInterface = AllowedClass && AllowedClass->HasAnyClassFlags(CLASS_Interface);
+							if (AllowedClass && (!bIsInterface || (ImplementClass && AllowedClass->ImplementsInterface(ImplementClass))))
+							{
+								AllowedClasses.Add(AllowedClass);
+							}
+						}
+					}
+					TArray<FString> DisallowedClassNames;
+					It->GetMetaData(TEXT("DisallowedClasses")).ParseIntoArray(DisallowedClassNames, TEXT(","), true);
+					if (DisallowedClassNames.Num() > 0)
+					{
+						for (const FString& ClassName : DisallowedClassNames)
+						{
+#if UE_5_00_OR_LATER
+							UClass* DisallowedClass = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+#else
+							UClass* DisallowedClass = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+#endif
+							const bool bIsInterface = DisallowedClass && DisallowedClass->HasAnyClassFlags(CLASS_Interface);
+							if (DisallowedClass && (!bIsInterface || (ImplementClass && DisallowedClass->ImplementsInterface(ImplementClass))))
+							{
+								DisallowedClasses.Add(DisallowedClass);
+							}
+						}
+					}
+					break;
+				}
+			}
+
+		} while (0);
+		return bAllowAbstract;
+	}
 };
-
-
 
 class FSoftclassPathSelectorFilter : public IClassViewerFilter
 {
@@ -367,7 +375,11 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 				if (FilterClass && MetaClass && MetaClass != FilterClass && MetaClass->IsChildOf(FilterClass))
 				{
 					InGraphPinObj->PinType.PinSubCategoryObject = MetaClass;
-					InGraphPinObj->GetOwningNode()->GetGraph()->NotifyGraphChanged();
+					auto Node = GraphPinObj->GetOwningNode();
+					RegisterActiveTimer(0.01f, FWidgetActiveTimerDelegate::CreateWeakLambda(Node, [Node](double, float) {
+											Node->GetGraph()->NotifyNodeChanged(Node);
+											return EActiveTimerReturnType::Stop;
+										}));
 					bRet = true;
 				}
 				break;
@@ -382,16 +394,16 @@ bool SClassPickerGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 		TSet<const UClass*> DisallowedClasses;
 		TSet<FName> WithinMetaKeys;
 		TSet<FName> WithoutMetaKeys;
-		bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
+		bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop) {
 			TArray<FString> WithinMetaKey;
 			TArray<FString> WithoutMetaKey;
 			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
 			Prop->GetMetaData(TEXT("WithoutMetaKey")).ParseIntoArray(WithoutMetaKey, TEXT(","), true);
-			for (auto&Key:WithinMetaKey)
+			for (auto& Key : WithinMetaKey)
 			{
 				WithinMetaKeys.Add(*Key);
 			}
-			for(auto&Key:WithoutMetaKey)
+			for (auto& Key : WithoutMetaKey)
 			{
 				WithoutMetaKeys.Add(*Key);
 			}
@@ -478,20 +490,20 @@ TSharedRef<SWidget> SClassPickerGraphPin::GenerateAssetPicker()
 	TSet<const UClass*> DisallowedClasses;
 	TSet<FName> WithinMetaKeys;
 	TSet<FName> WithoutMetaKeys;
-	bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop){
-			TArray<FString> WithinMetaKey;
-			TArray<FString> WithoutMetaKey;
-			Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
-			Prop->GetMetaData(TEXT("WithoutMetaKey")).ParseIntoArray(WithoutMetaKey, TEXT(","), true);
-			for (auto&Key:WithinMetaKey)
-			{
-				WithinMetaKeys.Add(*Key);
-			}
-			for(auto&Key:WithoutMetaKey)
-			{
-				WithoutMetaKeys.Add(*Key);
-			}
-		});
+	bool bAllowAbstract = FClassPickerGraphPinUtils::GetMetaClassData(GraphPinObj, InterfaceMustBeImplemented, AllowedClasses, DisallowedClasses, BindProp, [&](const FProperty* Prop) {
+		TArray<FString> WithinMetaKey;
+		TArray<FString> WithoutMetaKey;
+		Prop->GetMetaData(TEXT("WithinMetaKey")).ParseIntoArray(WithinMetaKey, TEXT(","), true);
+		Prop->GetMetaData(TEXT("WithoutMetaKey")).ParseIntoArray(WithoutMetaKey, TEXT(","), true);
+		for (auto& Key : WithinMetaKey)
+		{
+			WithinMetaKeys.Add(*Key);
+		}
+		for (auto& Key : WithoutMetaKey)
+		{
+			WithoutMetaKeys.Add(*Key);
+		}
+	});
 
 	if (!AllowedClasses.Num())
 	{
@@ -669,19 +681,28 @@ bool SObjectFilterGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 				{
 					InGraphPinObj->bNotConnectable = true;
 				}
-				else if (It->HasMetaData(TEXT("RequrieConnection")))
+				if (It->HasMetaData(TEXT("RequireConnection")))
 				{
 					InGraphPinObj->bDisplayAsMutableRef = true;
 					InGraphPinObj->bDefaultValueIsIgnored = true;
+					bHiddenDefaultValue = true;
 				}
-
+				if (It->HasMetaData(TEXT("HiddenDefaultValue")))
+				{
+					InGraphPinObj->bDefaultValueIsIgnored = true;
+					bHiddenDefaultValue = true;
+				}
 				auto MetaClass = It->GetClassMetaData(TEXT("MetaClass"));
 				auto FilterClass = Cast<const UClass>(InGraphPinObj->PinType.PinSubCategoryObject.Get());
 				if (FilterClass && MetaClass && MetaClass != FilterClass && MetaClass->IsChildOf(FilterClass))
 				{
 					InGraphPinObj->PinType.PinSubCategoryObject = MetaClass;
 					WeakMetaClass = MetaClass;
-					InGraphPinObj->GetOwningNode()->GetGraph()->NotifyGraphChanged();
+					auto Node = GraphPinObj->GetOwningNode();
+					RegisterActiveTimer(0.01f, FWidgetActiveTimerDelegate::CreateWeakLambda(Node, [Node](double, float) {
+											Node->GetGraph()->NotifyNodeChanged(Node);
+											return EActiveTimerReturnType::Stop;
+										}));
 					Ret = true;
 				}
 				break;
@@ -690,6 +711,142 @@ bool SObjectFilterGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 
 	} while (0);
 	return Ret;
+}
+
+const FAssetData& SObjectFilterGraphPin::GetAssetData(bool bRuntimePath) const
+{
+	if (bRuntimePath)
+	{
+		// For runtime use the default path
+		return SGraphPinObject::GetAssetData(bRuntimePath);
+	}
+
+#if UE_5_00_OR_LATER
+	FString CachedRuntimePath = CachedEditorAssetData.GetObjectPathString() + TEXT("_C");
+#else
+	FString CachedRuntimePath = CachedEditorAssetData.ObjectPath.ToString() + TEXT("_C");
+#endif
+
+	if (GraphPinObj->DefaultObject)
+	{
+		if (!GraphPinObj->DefaultObject->GetPathName().Equals(CachedRuntimePath, ESearchCase::CaseSensitive))
+		{
+			// This will cause it to use the UBlueprint
+			CachedEditorAssetData = FAssetData(GraphPinObj->DefaultObject, false);
+		}
+	}
+	else if (!GraphPinObj->DefaultValue.IsEmpty())
+	{
+		if (!GraphPinObj->DefaultValue.Equals(CachedRuntimePath, ESearchCase::CaseSensitive))
+		{
+			FString EditorPath = GraphPinObj->DefaultValue;
+			EditorPath.RemoveFromEnd(TEXT("_C"));
+			const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+#if UE_5_00_OR_LATER
+			CachedEditorAssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FSoftObjectPath(EditorPath));
+#else
+			CachedEditorAssetData = AssetRegistryModule.Get().GetAssetByObjectPath(FName(*EditorPath));
+#endif
+			if (!CachedEditorAssetData.IsValid())
+			{
+				FString PackageName = FPackageName::ObjectPathToPackageName(EditorPath);
+				FString PackagePath = FPackageName::GetLongPackagePath(PackageName);
+				FString ObjectName = FPackageName::ObjectPathToObjectName(EditorPath);
+
+// Fake one
+#if UE_5_00_OR_LATER
+				CachedEditorAssetData = FAssetData(FName(*PackageName), FName(*PackagePath), FName(*ObjectName), FTopLevelAssetPath(UObject::StaticClass()));
+#else
+				CachedEditorAssetData = FAssetData(FName(*PackageName), FName(*PackagePath), FName(*ObjectName), UObject::StaticClass()->GetFName());
+#endif
+			}
+		}
+	}
+	else
+	{
+		if (CachedEditorAssetData.IsValid())
+		{
+			CachedEditorAssetData = FAssetData();
+		}
+	}
+
+	return CachedEditorAssetData;
+}
+
+TSharedRef<SWidget> SObjectFilterGraphPin::GenerateAssetPicker()
+{
+	// This class and its children are the classes that we can show objects for
+	UClass* AllowedClass = Cast<UClass>(GraphPinObj->PinType.PinSubCategoryObject.Get());
+	if (AllowedClass == NULL)
+	{
+		AllowedClass = WeakMetaClass.IsValid() ? WeakMetaClass.Get() : UObject::StaticClass();
+	}
+
+	FContentBrowserModule& ContentBrowserModule = FModuleManager::Get().LoadModuleChecked<FContentBrowserModule>(TEXT("ContentBrowser"));
+
+	FAssetPickerConfig AssetPickerConfig;
+	AssetPickerConfig.Filter.ClassPaths.Add(AllowedClass->GetClassPathName());
+	AssetPickerConfig.bAllowNullSelection = true;
+	AssetPickerConfig.Filter.bRecursiveClasses = true;
+	AssetPickerConfig.OnAssetSelected = FOnAssetSelected::CreateSPLambda(this, [this](const struct FAssetData& AssetData) { OnAssetSelectedFromPicker(AssetData); });
+	AssetPickerConfig.OnAssetEnterPressed = FOnAssetEnterPressed::CreateSPLambda(this, [this](const TArray<FAssetData>& InSelectedAssets) { OnAssetEnterPressedInPicker(InSelectedAssets); });
+
+	AssetPickerConfig.InitialAssetViewType = EAssetViewType::List;
+	AssetPickerConfig.bAllowDragging = false;
+
+	// Check with the node to see if there is any "AllowClasses" or "DisallowedClasses" metadata for the pin
+	FString AllowedClassesFilterString = GraphPinObj->GetOwningNode()->GetPinMetaData(GraphPinObj->PinName, FName(TEXT("AllowedClasses")));
+	if (!AllowedClassesFilterString.IsEmpty())
+	{
+		// Clear out the allowed class names and have the pin's metadata override.
+		AssetPickerConfig.Filter.ClassPaths.Empty();
+
+		// Parse and add the classes from the metadata
+		TArray<FString> AllowedClassesFilterNames;
+		AllowedClassesFilterString.ParseIntoArrayWS(AllowedClassesFilterNames, TEXT(","), true);
+		for (const FString& AllowedClassesFilterName : AllowedClassesFilterNames)
+		{
+			ensureAlwaysMsgf(!FPackageName::IsShortPackageName(AllowedClassesFilterName),
+							 TEXT("Short class names are not supported as AllowedClasses on pin \"%s\": class \"%s\""),
+							 *GraphPinObj->PinName.ToString(),
+							 *AllowedClassesFilterName);
+#if UE_5_00_OR_LATER
+			AssetPickerConfig.Filter.ClassPaths.Add(FTopLevelAssetPath(AllowedClassesFilterName));
+#else
+			AssetPickerConfig.Filter.ClassPaths.Add(AllowedClassesFilterName);
+#endif
+		}
+	}
+
+	FString DisallowedClassesFilterString = GraphPinObj->GetOwningNode()->GetPinMetaData(GraphPinObj->PinName, FName(TEXT("DisallowedClasses")));
+	if (!DisallowedClassesFilterString.IsEmpty())
+	{
+		TArray<FString> DisallowedClassesFilterNames;
+		DisallowedClassesFilterString.ParseIntoArrayWS(DisallowedClassesFilterNames, TEXT(","), true);
+		for (const FString& DisallowedClassesFilterName : DisallowedClassesFilterNames)
+		{
+			ensureAlwaysMsgf(!FPackageName::IsShortPackageName(DisallowedClassesFilterName),
+							 TEXT("Short class names are not supported as DisallowedClasses on pin \"%s\": class \"%s\""),
+							 *GraphPinObj->PinName.ToString(),
+							 *DisallowedClassesFilterName);
+#if UE_5_00_OR_LATER
+			AssetPickerConfig.Filter.RecursiveClassPathsExclusionSet.Add(FTopLevelAssetPath(DisallowedClassesFilterName));
+#else
+			AssetPickerConfig.Filter.RecursiveClassPathsExclusionSet.Add(DisallowedClassesFilterName);
+#endif
+		}
+	}
+
+	return SNew(SBox)
+			.HeightOverride(300)
+			.WidthOverride(300)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::GetBrush("Menu.Background"))
+				[
+					ContentBrowserModule.Get().CreateAssetPicker(AssetPickerConfig)
+				]
+			];
 }
 
 void SObjectFilterGraphPin::Construct(const FArguments& InArgs, UEdGraphPin* InGraphPinObj)
@@ -752,10 +909,16 @@ bool SDataTableFilterGraphPin::SetMetaInfo(UEdGraphPin* InGraphPinObj)
 				{
 					InGraphPinObj->bNotConnectable = true;
 				}
-				else if (It->HasMetaData(TEXT("RequrieConnection")))
+				if (It->HasMetaData(TEXT("RequireConnection")))
 				{
 					InGraphPinObj->bDisplayAsMutableRef = true;
 					InGraphPinObj->bDefaultValueIsIgnored = true;
+					bHiddenDefaultValue = true;
+				}
+				if (It->HasMetaData(TEXT("HiddenDefaultValue")))
+				{
+					InGraphPinObj->bDefaultValueIsIgnored = true;
+					bHiddenDefaultValue = true;
 				}
 
 				bDisableNoneSelection = It->HasMetaData(TEXT("DisableNoneSelection"));
