@@ -7,6 +7,13 @@
 #include "StaticProperty.h"
 
 #include "SubSystemStorages.generated.h"
+UENUM(BlueprintType)
+enum class EScopeSharedStorageOp : uint8
+{
+	TrySet,
+	Override,
+	Clear,
+};
 
 UCLASS()
 class UScopeSharedStorage : public UBlueprintFunctionLibrary
@@ -14,9 +21,9 @@ class UScopeSharedStorage : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 public:
 	template<typename T>
-	static bool SetScopedSharedStorage(UObject* InScope, FName Key, const T& Val, bool bReplace = false)
+	static bool SetScopedSharedStorage(UObject* InScope, FName Key, const T& Val, EScopeSharedStorageOp Op = EScopeSharedStorageOp::TrySet)
 	{
-		return  SetScopedSharedStorageImpl(InScope, Key, GenericStorages::StaticProperty<T>(), std::addressof(Val), bReplace);
+		return SetScopedSharedStorageImpl(InScope, Key, GenericStorages::StaticProperty<T>(), std::addressof(Val), Op);
 	}
 	template<typename T>
 	static const T* GetScopedSharedStorage(UObject* InScope, FName Key)
@@ -24,20 +31,26 @@ public:
 		return static_cast<const T*>(GetScopedSharedStorageImpl(InScope, Key, GenericStorages::StaticProperty<T>()));
 	}
 	template<typename T>
-	static const T& GetScopedSharedStorage(UObject* InScope, FName Key, T& Val)
+	static const T& GetScopedSharedStorage(UObject* InScope, FName Key, T& FallbackVal)
 	{
 		auto Ret = static_cast<const T*>(GetScopedSharedStorageImpl(InScope, Key, GenericStorages::StaticProperty<T>()));
-		return Ret ? *Ret : Val;
+		return Ret ? *Ret : FallbackVal;
 	}
-	
+	template<typename T>
+	static bool ClearScopedSharedStorage(UObject* InScope, FName Key)
+	{
+		return SetScopedSharedStorageImpl(InScope, Key, GenericStorages::StaticProperty<T>(), nullptr, EScopeSharedStorageOp::Clear);
+	}
+
 protected:
-	UFUNCTION(BlueprintCallable, Category = "ScopeSharedStorage", CustomThunk, meta=(WorldContext="InScope", bReplace="true", CustomStructureParam="Val"))
-	static bool SetScopedSharedStorage(UObject* InScope, bool bReplace, const FName& InKey, const int32& Val);
+	UFUNCTION(BlueprintCallable, Category = "ScopeSharedStorage", CustomThunk, meta = (WorldContext = "InScope", bReplace = "true", CustomStructureParam = "Val"))
+	static bool SetScopedSharedStorage(UObject* InScope, EScopeSharedStorageOp Op, const FName& InKey, const int32& Val);
 	DECLARE_FUNCTION(execSetScopedSharedStorage);
-	UFUNCTION(BlueprintCallable, Category = "ScopeSharedStorage", CustomThunk, meta=(WorldContext="InScope", CustomStructureParam="Val"))
+	UFUNCTION(BlueprintCallable, Category = "ScopeSharedStorage", CustomThunk, meta = (WorldContext = "InScope", CustomStructureParam = "Val"))
 	static bool GetScopedSharedStorage(UObject* InScope, const FName& InKey, UPARAM(Ref) int32& Val);
 	DECLARE_FUNCTION(execGetScopedSharedStorage);
+
 protected:
-	static bool SetScopedSharedStorageImpl(UObject* InScope, const FName& InKey, const FProperty* Prop, const void* Addr, bool bReplace);
+	static bool SetScopedSharedStorageImpl(UObject* InScope, const FName& InKey, const FProperty* Prop, const void* Addr, EScopeSharedStorageOp Op);
 	static const void* GetScopedSharedStorageImpl(UObject* InScope, const FName& InKey, const FProperty* Prop);
 };

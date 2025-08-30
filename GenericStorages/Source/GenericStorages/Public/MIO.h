@@ -27,7 +27,7 @@ GENERICSTORAGES_API FString ConvertToAbsolutePath(FString InOutPath);
 GENERICSTORAGES_API int32 ReadLines(const TCHAR* Filename, const TFunctionRef<void(const TArray<uint8>&)>& Lambda, char Dim = '\n');
 GENERICSTORAGES_API int32 WriteLines(const TCHAR* Filename, const TArray<TArray<uint8>>& Lines, char Dim = '\n');
 GENERICSTORAGES_API bool SetFileSize(const TCHAR* Filename, int64 NewSize, bool bAllowShrink = true);
-GENERICSTORAGES_API  bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(TArrayView<const uint8>)>& Lambda, int32 InSize = 4096);
+GENERICSTORAGES_API  bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(TArrayView<const uint8>)>& Lambda, int32 InSize = 16384);
 GENERICSTORAGES_API FString GetFileHash(const TCHAR* Filename, const FString& HashType = TEXT("md5"));
 
 

@@ -94,14 +94,14 @@ void UStaticPropertiesContainer::AddCppProperty(FProperty* Property)
 DEFINE_FUNCTION(UScopeSharedStorage::execSetScopedSharedStorage)
 {
 	P_GET_OBJECT(UObject, InScope);
-	P_GET_UBOOL(bReplace);
+	P_GET_ENUM(EScopeSharedStorageOp, Op);
 	P_GET_PROPERTY(FNameProperty, InKey);
 	Stack.StepCompiledIn<FProperty>(nullptr);
 	auto Prop = Stack.MostRecentProperty;
 	auto Addr = Stack.MostRecentPropertyAddress;
 	P_FINISH
 	P_NATIVE_BEGIN
-	*(bool*)RESULT_PARAM = SetScopedSharedStorageImpl(InScope, InKey, Prop, Addr, bReplace);
+	*(bool*)RESULT_PARAM = SetScopedSharedStorageImpl(InScope, InKey, Prop, Addr, Op);
 	P_NATIVE_END
 }
 DEFINE_FUNCTION(UScopeSharedStorage::execGetScopedSharedStorage)
@@ -122,7 +122,7 @@ DEFINE_FUNCTION(UScopeSharedStorage::execGetScopedSharedStorage)
 	P_NATIVE_END
 }
 
-bool UScopeSharedStorage::SetScopedSharedStorageImpl(UObject* InScope, const FName& InKey, const FProperty* Prop, const void* Addr, bool bReplace)
+bool UScopeSharedStorage::SetScopedSharedStorageImpl(UObject* InScope, const FName& InKey, const FProperty* Prop, const void* Addr, EScopeSharedStorageOp Op)
 {
 	if (!ensure(InScope && Prop && Addr))
 	{
@@ -130,15 +130,15 @@ bool UScopeSharedStorage::SetScopedSharedStorageImpl(UObject* InScope, const FNa
 	}
 	if (auto Ins = Cast<UGameInstance>(InScope))
 	{
-		return FSubsystemStorageUtils::SetKeyValue(Ins->GetSubsystem<UGameInstanceSubSystemStorages>(), InKey, Prop, Addr, bReplace);
+		return FSubsystemStorageUtils::SetKeyValue(Ins->GetSubsystem<UGameInstanceSubSystemStorages>(), InKey, Prop, Addr, Op);
 	}
 	else if (auto LP = Cast<ULocalPlayer>(InScope))
 	{
-		return FSubsystemStorageUtils::SetKeyValue(LP->GetSubsystem<UPlayerSubSystemStorages>(), InKey, Prop, Addr, bReplace);
+		return FSubsystemStorageUtils::SetKeyValue(LP->GetSubsystem<UPlayerSubSystemStorages>(), InKey, Prop, Addr, Op);
 	}
 	else if (UWorld* World = InScope->GetWorld())
 	{
-		return FSubsystemStorageUtils::SetKeyValue(World->GetSubsystem<UWorldSubSystemStorages>(), InKey, Prop, Addr, bReplace);
+		return FSubsystemStorageUtils::SetKeyValue(World->GetSubsystem<UWorldSubSystemStorages>(), InKey, Prop, Addr, Op);
 	}
 	return false;
 }
