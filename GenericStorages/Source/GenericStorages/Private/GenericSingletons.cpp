@@ -30,6 +30,38 @@
 
 namespace GenericStorages
 {
+static UClass* GetValidBaseClass(UClass* InClass)
+{
+	while (InClass && !InClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Native))
+	{
+		InClass = InClass->GetSuperClass();
+	}
+	return InClass;
+}
+
+static UClass* TraceSingletonMeta(UClass* InCls)
+{
+#if WITH_EDITOR
+	bool bAsSignleton = false;
+	if (InCls)
+	{
+		for (auto Cls = InCls; Cls != UObject::StaticClass(); Cls = Cls->GetSuperClass())
+		{
+			if (Cls->HasMetaData(TEXT("AsSingleton")))
+			{
+				bAsSignleton = true;
+				break;
+			}
+		}
+	}
+	if (!bAsSignleton)
+	{
+		UE_LOG(LogGenericStorages, Warning, TEXT("Class:{%s} as singleton which need 'AsSingleton' Meta"), *GetNameSafe(InCls));
+	}
+#endif
+	return InCls;
+}
+
 GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 {
 	auto World = GWorld;
@@ -49,7 +81,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 				}
 			}
 
-			// ensure(World);
+			UE_LOG(LogGenericStorages, Warning, TEXT("GetGameWorldChecked Fallback to GameWorld %s"), *GetNameSafe(World));
 			return World;
 		};
 
@@ -65,6 +97,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 
 		if (!World && !bEnsureGameWorld)
 		{
+			UE_LOG(LogGenericStorages, Warning, TEXT("GetGameWorldChecked Fallback to EditorWorld %s"), *GetNameSafe(World));
 			World = GEditor->GetEditorWorldContext().World();
 		}
 	}
@@ -73,7 +106,7 @@ GENERICSTORAGES_API UWorld* GetGameWorldChecked(bool bEnsureGameWorld)
 #endif
 	return World;
 }
-UGameInstance* FindGameInstance(UObject* InObj)
+UGameInstance* FindGameInstance(const UObject* InObj)
 {
 	UGameInstance* Instance = nullptr;
 #if WITH_EDITOR
@@ -81,15 +114,15 @@ UGameInstance* FindGameInstance(UObject* InObj)
 	{
 		if (InObj->IsA<UGameInstance>())
 		{
-			Instance = CastChecked<UGameInstance>(InObj);
+			Instance = const_cast<UGameInstance*>(CastChecked<UGameInstance>(InObj));
 		}
-		
+
 		if (auto World = GEngine->GetWorldFromContextObject(InObj, EGetWorldErrorMode::LogAndReturnNull))
 		{
 			Instance = World->GetGameInstance();
 		}
 
-		if(Instance)
+		if (Instance)
 			return Instance;
 	}
 
@@ -113,56 +146,55 @@ UObject* CreateInstanceImpl(const UObject* WorldContextObject, const FObjConstru
 {
 	auto Class = Parameter.Class;
 	check(Class);
-	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
-	UObject* Ctx = World;
-	bool bIsActorClass = Class->IsChildOf<AActor>();
+	UGameInstance* const InInstance = const_cast<UGameInstance*>(Cast<UGameInstance>(WorldContextObject));
+	UWorld* const InWorld = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+	const bool bIsActorClass = Class->IsChildOf<AActor>();
 	UObject* Ptr = nullptr;
 
 	FName InstName = Parameter.Name;
 	const bool bNameNone = Parameter.Name.IsNone();
+	UObject* Ctx = const_cast<UObject*>(WorldContextObject);
 
 	do
 	{
-		if (!IsValid(World))
-		{
-			ensureAlwaysMsgf(!bIsActorClass, TEXT("cannot create actor while world not existed!!!"));
-			UGameInstance* Instance = GenericStorages::FindGameInstance((UObject*)WorldContextObject);
-#ifdef PLATFORM_LINUX
-#else
-			ensure(Instance);
-#endif
+		UGameInstance* Instance = InInstance ? InInstance : GenericStorages::FindGameInstance(WorldContextObject);
+		UWorld* World = InWorld;
+		if (!InWorld && IsValid(InInstance))
+			World = Instance->GetWorld();
+		Ctx = InInstance ? (UObject*)Instance : (UObject*)World;
 #if WITH_EDITOR
-			static auto GetGSIndex = [](UGameInstance* Inst)
+		static auto GetGameInstanceClsName = [](UClass* InCls, UGameInstance* Inst) {
+			auto Idx = 0;
+			if (Inst)
 			{
-				if (Inst)
-				{
-					static WorldLocalStorages::TGenericGameLocalStorage<uint64> GSIns_IndexStorage;
-					return ++GSIns_IndexStorage.GetLocalValue(Inst, 0);
-				}
-				else
-				{
-					static uint64 GSIns_Index = 0;
-					return ++GSIns_Index;
-				}
-			};
-			if (bNameNone)
-				InstName = FName(*FString::Printf(TEXT("GSIns_%s"), *GetNameSafe(Class)), GetGSIndex(Instance));
+				static WorldLocalStorages::TGenericGameLocalStorage<uint64> GSIns_IndexStorage;
+				Idx = ++GSIns_IndexStorage.GetLocalValue(Inst, 0);
+			}
+			else
+			{
+				static uint64 GSIns_Index = 0;
+				Idx = ++GSIns_Index;
+			}
+			return FName(*FString::Printf(TEXT("GSIns_%s"), *GetNameSafe(InCls)), Idx);
+		};
+		static auto GetWorldClsName = [](UClass* InCls, UWorld* Inst) {
+			static WorldLocalStorages::TGenericWorldLocalStorage<uint64> GSWorld_IndexStorage;
+			auto Idx = ++GSWorld_IndexStorage.GetLocalValue(Inst, 0);
+			return FName(*FString::Printf(TEXT("GSWorld_%s"), *GetNameSafe(InCls)), Idx);
+		};
+		if (bNameNone)
+			InstName = InInstance ? GetGameInstanceClsName(Class, InInstance) : GetWorldClsName(Class, World);
 #endif
-			Ctx = Instance ? (UObject*)Instance : (UObject*)GetTransientPackage();
-			Ptr = NewObject<UObject>(Ctx, Class, InstName);
+
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGenericStorages, Log, TEXT("CreateInstanceImpl: Name:%s, Class:%s, Ctx:%s, World:%s, Instance:%s"), *InstName.ToString(), *GetNameSafe(Class), *GetNameSafe(Ctx), *GetNameSafe(InWorld), *GetNameSafe(InInstance));
+#endif
+		if (!Ctx)
+		{
+			Ptr = NewObject<UObject>(GetTransientPackage(), Class, InstName);
 		}
-		else
+		else if (bIsActorClass && ensureAlwaysMsgf(World, TEXT("cannot create actor while world not existed!!!")))
 		{
-#if WITH_EDITOR
-			static auto GetGSIndex = [](UWorld* Inst)
-			{
-				static WorldLocalStorages::TGenericWorldLocalStorage<uint64> GSIns_IndexStorage;
-				return ++GSIns_IndexStorage.GetLocalValue(Inst, 0);
-			};
-			if (bNameNone)
-				InstName = FName(*FString::Printf(TEXT("GSWorld_%s"), *GetNameSafe(Class)), GetGSIndex(World));
-#endif
-			UGameInstance* Instance = World->GetGameInstance();
 			ULevel* Level = (ULevel*)Cast<ULevel>(WorldContextObject);
 			Level = Level ? Level : ToRawPtr(World->PersistentLevel);
 			if (!bNameNone)
@@ -176,37 +208,35 @@ UObject* CreateInstanceImpl(const UObject* WorldContextObject, const FObjConstru
 				if (Ptr)
 					break;
 			}
-
-			if (!bIsActorClass)
-			{
-				Ctx = Instance ? (UObject*)Instance : (UObject*)World;
+#if WITH_EDITOR
+			if (bNameNone)
+				InstName = GetWorldClsName(Class, World);
+#endif
+			FActorSpawnParameters ActorSpawnParameters;
+			ActorSpawnParameters.Name = InstName;
+			ActorSpawnParameters.OverrideLevel = Level;
+			Ptr = World->SpawnActor(Class, Parameter.Trans, ActorSpawnParameters);
+		}
+		else
+		{
 #if !UE_SERVER
-				if (Class->IsChildOf<UUserWidget>())
+			if (Class->IsChildOf<UUserWidget>())
+			{
+				if (InInstance)
 				{
-					if (Instance)
-					{
-						Ptr = CreateWidget(Instance, Class, InstName);
-					}
-					else
-					{
-						Ptr = CreateWidget(World, Class, InstName);
-					}
+					Ptr = CreateWidget(InInstance, Class, InstName);
 				}
 				else
-#endif
 				{
-					Ptr = NewObject<UObject>(Ctx, Class, InstName);
+					Ptr = CreateWidget(World, Class, InstName);
 				}
 			}
 			else
+#endif
 			{
-				FActorSpawnParameters ActorSpawnParameters;
-				ActorSpawnParameters.Name = InstName;
-				ActorSpawnParameters.OverrideLevel = Level;
-				Ptr = World->SpawnActor(Class, Parameter.Trans, ActorSpawnParameters);
+				Ptr = NewObject<UObject>(Ctx, Class, InstName);
 			}
 		}
-
 	} while (false);
 
 	if (OutCtx)
@@ -232,16 +262,16 @@ UObject* GetSingletonCtxObject(const UObject* InObj, UWorld** OutWorld = nullptr
 		*OutWorld = World;
 	return (UObject*)InObj;
 }
-UGenericSingletons* GetSingletonsManager(const UObject* InObj)
+UGenericSingletons* GetSingletonsManager(const UObject* InObj, bool bCreate)
 {
 	if (!ensure(!IsGarbageCollecting()))
 		return nullptr;
 
 	if (InObj && InObj->IsA<UGameInstance>())
 	{
-		return GenericLocalStorages::GetGameValue<UGenericSingletons>(InObj);
+		return GenericLocalStorages::GetGameValue<UGenericSingletons>(InObj, bCreate);
 	}
-	return WorldLocalStorages::GetLocalValue<UGenericSingletons>(InObj);
+	return WorldLocalStorages::GetLocalValue<UGenericSingletons>(InObj, bCreate);
 }
 
 #if WITH_EDITOR
@@ -276,7 +306,7 @@ bool SetTimer(FTimerHandle& InOutHandle, UWorld* InWorld, FTimerDelegate const& 
 	auto TimerMgr = GetTimerManager(InWorld);
 	if (ensure(TimerMgr))
 	{
-		if(InDelegate.IsBound())
+		if (InDelegate.IsBound())
 		{
 			TimerMgr->SetTimer(InOutHandle, InDelegate, InRate, InbLoop, InFirstDelay);
 		}
@@ -289,27 +319,10 @@ bool SetTimer(FTimerHandle& InOutHandle, UWorld* InWorld, FTimerDelegate const& 
 	return false;
 }
 
-UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* Class, UObject*& OutCtx)
+UObject* CreateSingletonImpl(const UObject* WorldContextObject, UClass* InCls, UObject*& OutCtx)
 {
-	FName InstName = FName(*FString::Printf(TEXT("GSOne_%s"), *GetNameSafe(Class)));
-#if WITH_EDITOR
-	bool bAsSignleton = false;
-	if (Class)
-	{
-		for (auto Cls = Class; Cls != UObject::StaticClass(); Cls = Cls->GetSuperClass())
-		{
-			if (Cls->HasMetaData(TEXT("AsSingleton")))
-			{
-				bAsSignleton = true;
-				break;
-			}
-		}
-	}
-	if (!bAsSignleton)
-	{
-		UE_LOG(LogGenericStorages, Warning, TEXT("Class:{%s} as singleton which need 'AsSingleton' Meta"), *GetNameSafe(Class));
-	}
-#endif
+	FName InstName = FName(*FString::Printf(TEXT("GSOne_%s"), *GetNameSafe(InCls)));
+	auto Class = GenericStorages::TraceSingletonMeta(InCls);
 	return GenericStorages::CreateInstanceImpl(WorldContextObject, {Class, InstName}, &OutCtx);
 }
 }  // namespace GenericStorages
@@ -502,9 +515,9 @@ UObject* DynamicReflectionImpl(const FString& TypeName, UClass* TypeClass)
 			if (TypeClass->IsChildOf<UEnum>())
 			{
 				NewReflection = StaticFindObject(TypeClass, ClassPackage, *TypeName.Mid(0, [&] {
-				   auto Index = TypeName.Find(TEXT("::"));
-				   return Index == INDEX_NONE ? MAX_int32 : Index;
-			   }()));
+					auto Index = TypeName.Find(TEXT("::"));
+					return Index == INDEX_NONE ? MAX_int32 : Index;
+				}()));
 			}
 			else
 			{
@@ -538,7 +551,7 @@ void DeferredWorldCleanup(FSimpleDelegate Cb, FString Desc, bool EditorOnly)
 #if WITH_EDITOR
 		FGameDelegates::Get().GetEndPlayMapDelegate().Add(Cb);
 #endif
-		
+
 		struct FDeferredWorldCleanup
 		{
 			FSimpleDelegate Cb;
@@ -605,7 +618,7 @@ GENERICSTORAGES_API bool IsInSingletonCreatation(UObject* InObj)
 
 UGenericSingletons* UGenericSingletons::GetSingletonsManager(const UObject* InObj)
 {
-	return GenericStorages::GetSingletonsManager(InObj);
+	return GenericStorages::GetSingletonsManager(InObj, true);
 }
 
 UGenericSingletons::UGenericSingletons()
@@ -619,6 +632,13 @@ UGenericSingletons::UGenericSingletons()
 UObject* UGenericSingletons::K2_GetSingleton(UClass* Class, const UObject* WorldContextObject, bool bCreate)
 {
 	return GetSingletonInternal(Class, WorldContextObject, bCreate, nullptr, nullptr);
+}
+
+void UGenericSingletons::PureInstanceSingleton(UClass* Class, const UObject* Ctx, UObject*& Singleton, bool& bValid, bool bCreate /*= true*/)
+{
+	auto Ins = GenericStorages::FindGameInstance(Ctx);
+	Singleton = K2_GetSingleton(Class, Ins, bCreate);
+	bValid = !!Singleton;
 }
 
 namespace
@@ -668,11 +688,12 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 		UE_LOG(LogGenericStorages, Warning, TEXT("GenericSingletons::RegisterAsSingleton Skip : %s"), *GetPathNameSafe(Object));
 		return nullptr;
 	}
-	
-	UObject* SingletonCtx = GenericStorages::GetSingletonCtxObject(WorldContextObject);
-	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx);
-	auto ObjCls = Object->GetClass();
 
+	UObject* SingletonCtx = GenericStorages::GetSingletonCtxObject(WorldContextObject);
+	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx, true);
+
+	auto ObjCls = GenericStorages::TraceSingletonMeta(Object->GetClass());
+#if 0
 	if (!bReplaceExist)
 	{
 		auto& Ref = Mgr->Singletons.FindOrAdd(ObjCls);
@@ -692,6 +713,7 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 #endif
 		return Ref;
 	}
+#endif
 
 	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterReplacing %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
 
@@ -702,13 +724,21 @@ UObject* UGenericSingletons::RegisterAsSingletonInternal(UObject* Object, const 
 		LastPtr = IsValid(RefPtr) ? RefPtr : nullptr;
 
 		// ensureAlways(!bReplaceExist || !LastPtr || (!InBaseClass && CurClass->IsNative()) || InBaseClass /* == CurClass*/);
-		// if (LastPtr && !bReplaceExist)
-		// 	break;
-		
+		if (LastPtr && !bReplaceExist)
+			break;
+
 		{
 			RefPtr = Object;
 #if !UE_BUILD_SHIPPING
-			UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(RefPtr), RefPtr, *GetTypedNameSafe(CurClass), CurClass);
+			UE_LOG(LogGenericStorages,
+				   Log,
+				   TEXT("GenericSingletons::RegisterAsSingleton %s(%p) -> %s(%p) for %s(%p)"),
+				   *GetTypedNameSafe(SingletonCtx),
+				   SingletonCtx,
+				   *GetTypedNameSafe(RefPtr),
+				   RefPtr,
+				   *GetTypedNameSafe(CurClass),
+				   CurClass);
 #endif
 		}
 
@@ -734,11 +764,22 @@ bool UGenericSingletons::UnregisterSingletonImpl(UObject* Object, const UObject*
 		return false;
 	}
 
-
 	UObject* SingletonCtx = GenericStorages::GetSingletonCtxObject(WorldContextObject);
-	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx);
+	const bool bCreate = false;
+	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx, bCreate);
+	if (!bCreate && !Mgr)
+		return false;
+
 	auto ObjectClass = Object->GetClass();
-	UE_LOG(LogGenericStorages, Log, TEXT("GenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) for %s(%p)"), *GetTypedNameSafe(SingletonCtx), SingletonCtx, *GetTypedNameSafe(Object), Object, *GetTypedNameSafe(InBaseClass), InBaseClass);
+	UE_LOG(LogGenericStorages,
+		   Log,
+		   TEXT("GenericSingletons::UnregisterSingletonImpl %s(%p) -> %s(%p) for %s(%p)"),
+		   *GetTypedNameSafe(SingletonCtx),
+		   SingletonCtx,
+		   *GetTypedNameSafe(Object),
+		   Object,
+		   *GetTypedNameSafe(InBaseClass),
+		   InBaseClass);
 
 	UObject* LastPtr = nullptr;
 	for (auto CurClass = ObjectClass; CurClass && (InBaseClass || !CurClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Native)); CurClass = CurClass->GetSuperClass())
@@ -786,16 +827,12 @@ UObject* UGenericSingletons::GetSingletonInternal(UClass* SubClass, const UObjec
 	{
 		ensureAlways(SubClass->IsChildOf(RegClass));
 	}
-	static auto GetValidBaseClass = [](UClass* InClass) {
-		while (InClass && !InClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Native))
-		{
-			InClass = InClass->GetSuperClass();
-		}
-		return InClass;
-	};
-	
+
 	UObject* SingletonCtx = GenericStorages::GetSingletonCtxObject(WorldContextObject);
-	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx);
+	auto Mgr = GenericStorages::GetSingletonsManager(SingletonCtx, bCreate);
+	if (!bCreate && !Mgr)
+		return nullptr;
+
 	UObject*& Ptr = Mgr->Singletons.FindOrAdd(SubClass);
 	if (!IsValid(Ptr) && bCreate)
 	{
@@ -809,7 +846,7 @@ UObject* UGenericSingletons::GetSingletonInternal(UClass* SubClass, const UObjec
 #endif
 		if (ensureAlways(IsValid(Ptr)))
 		{
-			RegisterAsSingletonImpl(Ptr, WorldContextObject, true, GetValidBaseClass(SubClass));
+			RegisterAsSingletonImpl(Ptr, WorldContextObject, true, GenericStorages::GetValidBaseClass(SubClass));
 			if (Ptr->Implements<UGenericInstanceInc>())
 				IGenericInstanceInc::Execute_OnGencreicSingletonCreated(Ptr, Ctx);
 		}
@@ -927,8 +964,7 @@ TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadCls(const TArr
 	);
 }
 #endif
-TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadCls(const FSoftClassPath& InPath,
-	FAsyncLoadClsCallback Cb, bool bSkipInvalid, TAsyncLoadPriority Priority)
+TSharedPtr<struct FStreamableHandle> UGenericSingletons::AsyncLoadCls(const FSoftClassPath& InPath, FAsyncLoadClsCallback Cb, bool bSkipInvalid, TAsyncLoadPriority Priority)
 {
 	return AsyncLoadObj(InPath, MoveTemp(*reinterpret_cast<FAsyncLoadObjCallback*>(&Cb)), bSkipInvalid, Priority);
 }

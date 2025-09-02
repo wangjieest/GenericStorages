@@ -215,12 +215,8 @@ protected:
 		return K2_GetSingletonEx(bIsValid, Class, Ctx, bCreate, RegClass);
 	}
 
-	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", CallableWithoutWorldContext, DeterminesOutputType = "Class", DynamicOutputParam = "Singleton", AdvancedDisplay = "bValid"))
-	static void PureInstanceSingleton(UClass* Class, UObject*& Singleton, bool& bValid, bool bCreate = true)
-	{
-		Singleton = K2_GetSingleton(Class, nullptr, bCreate);
-		bValid = !!Singleton;
-	}
+	UFUNCTION(BlueprintPure, Category = "Game|GMP", meta = (DisplayName = "PureInstanceSingleton", WorldContext = "Ctx", DeterminesOutputType = "Class", DynamicOutputParam = "Singleton", AdvancedDisplay = "bValid"))
+	static void PureInstanceSingleton(UClass* Class, const UObject* Ctx, UObject*& Singleton, bool& bValid, bool bCreate = true);
 
 public:  // C++
 	FORCEINLINE static UObject* FindSingleton(UClass* Class, const UObject* WorldContextObject) { return GetSingletonInternal(Class, WorldContextObject, false); }

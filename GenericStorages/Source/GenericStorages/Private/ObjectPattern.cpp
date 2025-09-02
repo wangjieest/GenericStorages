@@ -152,29 +152,32 @@ FObjectPatternType::FWeakObjectArray::TIterator UObjectPattern::NativeIterator(i
 
 UObjectPattern::UObjectPattern()
 {
-	static bool bListened = false;
-	if (!bListened)
+	if (!HasAnyFlags(RF_ClassDefaultObject))
 	{
-		bListened = true;
-		FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
-			for (auto It = ObjectPattern::ClassToID.CreateIterator(); It;)
-			{
-				if (!It->Key.IsValid())
-					It.RemoveCurrent();
-				else
-					++It;
-			}
+		static bool bListened = false;
+		if (!bListened)
+		{
+			bListened = true;
+			FWorldDelegates::OnWorldCleanup.AddLambda([](UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/) {
+				for (auto It = ObjectPattern::ClassToID.CreateIterator(); It;)
+				{
+					if (!It->Key.IsValid())
+						It.RemoveCurrent();
+					else
+						++It;
+				}
 #if !WITH_EDITOR
-			FCSLock423 Lock;
+				FCSLock423 Lock;
 
-			if (auto Mgr = Get(World))
-				Mgr->Binddings.Empty();
+				if (auto Mgr = Get(World, false))
+					Mgr->Binddings.Empty();
 #endif
-		});
+			});
+		}
 	}
 }
 
-UObjectPattern* UObjectPattern::Get(const UObject* Obj)
+UObjectPattern* UObjectPattern::Get(const UObject* Obj, bool bCreate)
 {
 	if (!UObjectInitialized() || IsEngineExitRequested())
 		return nullptr;
@@ -182,12 +185,12 @@ UObjectPattern* UObjectPattern::Get(const UObject* Obj)
 #if WITH_EDITOR
 	if (GIsEditor)
 	{
-		return UGenericSingletons::GetSingleton<UObjectPattern>(Obj);
+		return UGenericSingletons::GetSingleton<UObjectPattern>(Obj, bCreate);
 	}
 	else
 #endif
 	{
-		return UGenericSingletons::GetSingleton<UObjectPattern>((UObject*)nullptr);
+		return UGenericSingletons::GetSingleton<UObjectPattern>((UObject*)nullptr, bCreate);
 	}
 }
 

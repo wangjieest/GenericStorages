@@ -1,4 +1,4 @@
-﻿// Copyright GenericStorages, Inc. All Rights Reserved.
+// Copyright GenericStorages, Inc. All Rights Reserved.
 
 #pragma once
 
@@ -35,13 +35,13 @@ public:
 
 //////////////////////////////////////////////////////////////////////////
 
-UCLASS(Transient, meta = (NeuronAction))
+UCLASS(Transient, meta = (NeuronAction, AsSingleton))
 class GENERICSTORAGES_API UObjectPattern : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 protected:
 	UObjectPattern();
-	static UObjectPattern* Get(const UObject* Obj);
+	static UObjectPattern* Get(const UObject* Obj, bool bCreate = true);
 
 	static UClass* FindFirstNativeClass(UClass* Class);
 

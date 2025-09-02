@@ -16,7 +16,7 @@ extern FString AndroidRelativeToAbsolutePath(bool bUseInternalBasePath, FString 
 
 namespace GenericStorages
 {
-UGameInstance* FindGameInstance(UObject* InObj);
+UGameInstance* FindGameInstance(const UObject* InObj);
 }
 namespace MIO
 {
