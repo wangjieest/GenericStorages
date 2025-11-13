@@ -310,7 +310,7 @@ namespace GenericStorages
 		{
 			return TSructPropertyTraits<T>::GetProperty();
 		}
-		else if constexpr (TIsSame<std::remove_pointer_t<T>, UClass>::Value)
+		else if constexpr (std::is_same<std::remove_pointer_t<T>, UClass>::value)
 		{
 			return FObjectPropertyTraits::GetProperty<T, FClassProperty>(UObject::StaticClass()->GetFName());
 		}

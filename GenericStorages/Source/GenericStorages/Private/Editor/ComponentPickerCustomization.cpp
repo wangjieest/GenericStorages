@@ -72,11 +72,18 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		const FString& ClassName = PropertyHandle->GetMetaData("MetaClass");
 		if (!ClassName.IsEmpty())
 		{
+			UClass* Class = nullptr;
 #if UE_5_00_OR_LATER
-			UClass* Class = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
-#else
-			UClass* Class = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+			if (!IsRunningCommandlet())
+			{
+				Class = UClass::TryFindTypeSlowSafe<UClass>(ClassName);
+			}
+			else
 #endif
+			{
+				Class = FindObject<UClass>(ANY_PACKAGE_COMPATIABLE, *ClassName);
+			}
+
 			if (!Class)
 			{
 				Class = LoadObject<UClass>(nullptr, *ClassName);
@@ -149,13 +156,13 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 		TSharedPtr<SWidget> ValueWidget;
 		HeaderRow
 			.IsEnabled(!PropertyHandle->IsEditConst())
-			.NameContent()
+		.NameContent()
 		[
-				PropertyHandle->CreatePropertyNameWidget()
+			PropertyHandle->CreatePropertyNameWidget()
 		]
 		.ValueContent()
-			.MinDesiredWidth(260.f)
-			.MaxDesiredWidth(0.f)
+		.MinDesiredWidth(260.f)
+		.MaxDesiredWidth(0.f)
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -166,7 +173,7 @@ void FComponentPickerCustomization::CustomizeHeader(TSharedRef<IPropertyHandle> 
 				.InitiallySelectedItem(SharedMyValue)
 				.OnGenerateWidget_Lambda([](TSharedPtr<FName> InName) {
 					return SNew(STextBlock)
-					.Text(FText::FromName(*InName));
+							.Text(FText::FromName(*InName));
 				})
 				.OnSelectionChanged_Lambda([this](TSharedPtr<FName> InName, ESelectInfo::Type SelectInfo) {
 					if (SelectInfo == ESelectInfo::OnNavigation)

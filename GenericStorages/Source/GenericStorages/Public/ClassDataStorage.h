@@ -61,6 +61,9 @@ protected:
 	//////////////////////////////////////////////////////////////////////////
 	DataPtrType* Add(TMap<TWeakObjectPtr<const UStruct>, DataPtrType>& Regs, const UStruct* Class, bool bEnsure, bool* bNewCreated = nullptr)
 	{
+#if !UE_BUILD_SHIPPING
+		UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Add %s"), *Class->GetName());
+#endif
 		if (bEnsure && !ensureAlwaysMsgf(bEnableAdd, TEXT("TClassDataStorage cannot add data anymore")))
 			return nullptr;
 
@@ -96,7 +99,7 @@ protected:
 						else if (SuperPtr->KeyClass.IsValid() && Class->IsChildOf(SuperPtr->KeyClass.Get()))
 						{
 #if !UE_BUILD_SHIPPING
-							UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Inserted %s->  -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName(), *SuperPtr->KeyClass->GetName());
+							UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Inserted %s-> %s -> %s"), *CurPtr->KeyClass->GetName(), *Class->GetName(), *SuperPtr->KeyClass->GetName());
 #endif
 							Ptr->Super = CurPtr->Super;
 							CurPtr->Super = Ptr;
@@ -218,7 +221,7 @@ public:
 		if (ensureAlways(Class))
 		{
 #if !UE_BUILD_SHIPPING
-			UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Modify%s %s"), bPersistent ? TEXT("All") : TEXT("Cur"), *Class->GetName());
+			UE_LOG(LogGenericStorages, Log, TEXT("TClassDataStorage::Modify %s %s"), bPersistent ? TEXT("All") : TEXT("Cur"), *Class->GetName());
 #endif
 			if (bPersistent)
 			{

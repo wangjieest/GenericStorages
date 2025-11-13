@@ -545,7 +545,7 @@ inline void* OpenLockHandle(const TCHAR* Path, FString& ErrorCategory)
     if (INVALID_HANDLE_VALUE != Handle)
         return Handle;
 
-    ErrorCategory = FString::Printf(TEXT("GetLastError: %d"), ::GetLastError(), Path);
+    ErrorCategory = FString::Printf(TEXT("GetLastError: %d, %s"), ::GetLastError(), Path);
     return nullptr;
 }
 inline void CloseLockHandle(void* InHandle)

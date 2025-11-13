@@ -67,7 +67,7 @@ public:
 	template<typename T>
 	static T* GetObject(const UObject* WorldContextObj)
 	{
-		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !std::is_same<T, UObject>::value, "err");
 		if (!EditorIsGameWorld(WorldContextObj))
 			return nullptr;
 
@@ -100,7 +100,7 @@ public:
 		if (!Obj->HasAnyFlags(RF_ArchetypeObject))
 		{
 #if WITH_EDITOR
-			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !std::is_same<T, UObject>::value, "err");
 			check(IsValid(Obj));
 			check(Obj->IsA(T::StaticClass()));
 #if 0
@@ -139,7 +139,7 @@ protected:
 	{
 		auto Index = GetTypeID<T>();
 		static_assert(TIsDerivedFrom<T, TEachObjectPattern<T>>::IsDerived, "err");
-		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !std::is_same<T, UObject>::value, "err");
 		check(Index);
 		return NativeIterator(Index);
 	}
@@ -154,7 +154,7 @@ protected:
 	static void Register(T* Obj)
 	{
 #if WITH_EDITOR
-		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !std::is_same<T, UObject>::value, "err");
 		check(IsValid(Obj));
 		check(Obj->IsA(T::StaticClass()));
 		if (Obj->HasAnyFlags(RF_Transactional))
@@ -208,7 +208,7 @@ protected:
 		if (!Obj->HasAnyFlags(RF_ArchetypeObject))
 		{
 #if WITH_EDITOR
-			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !TIsSame<T, UObject>::Value, "err");
+			static_assert(TIsDerivedFrom<T, UObject>::IsDerived && !std::is_same<T, UObject>::value, "err");
 			check(Obj->IsA(T::StaticClass()));
 
 #if 0

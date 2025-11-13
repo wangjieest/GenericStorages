@@ -44,6 +44,7 @@ public:
 
 protected:
 	friend struct FClassPickerGraphPinUtils;
+	static bool GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp = nullptr);
 	bool SetMetaInfo(UEdGraphPin* InGraphPinObj);
 
 	// Called when a new class was picked via the asset picker

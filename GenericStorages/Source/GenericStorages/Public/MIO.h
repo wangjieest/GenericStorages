@@ -30,7 +30,6 @@ GENERICSTORAGES_API bool SetFileSize(const TCHAR* Filename, int64 NewSize, bool 
 GENERICSTORAGES_API  bool ChunkingFile(const TCHAR* Filename, const TFunctionRef<void(TArrayView<const uint8>)>& Lambda, int32 InSize = 16384);
 GENERICSTORAGES_API FString GetFileHash(const TCHAR* Filename, const FString& HashType = TEXT("md5"));
 
-
 class GENERICSTORAGES_API FMappedBuffer
 {
 public:

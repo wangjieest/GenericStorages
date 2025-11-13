@@ -18,7 +18,7 @@ public:
 	template<typename T, typename F>
 	static void EachComponent(const UObject* WorldContextObj, const F& f)
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !std::is_same<T, UActorComponent>::value, "err");
 		UObjectPattern::EachObject<T>(WorldContextObj, f);
 	}
 
@@ -35,7 +35,7 @@ public:
 	template<typename T>
 	static T* GetComponent(const UObject* WorldContextObject)
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !std::is_same<T, UActorComponent>::value, "err");
 		return UObjectPattern::GetObject<T>(WorldContextObject);
 	}
 
@@ -57,7 +57,7 @@ struct TEachComponentPattern : public TEachObjectPattern<T>
 {
 	TEachComponentPattern()
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !std::is_same<T, UActorComponent>::value, "err");
 		Ctor(static_cast<T*>(this));
 	}
 	~TEachComponentPattern() { Dtor(static_cast<T*>(this)); }
@@ -72,7 +72,7 @@ struct TSingleComponentPattern : public TSingleObjectPattern<T>
 {
 	TSingleComponentPattern()
 	{
-		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !TIsSame<T, UActorComponent>::Value, "err");
+		static_assert(TIsDerivedFrom<T, UActorComponent>::IsDerived && !std::is_same<T, UActorComponent>::value, "err");
 		Ctor(static_cast<T*>(this));
 	}
 	~TSingleComponentPattern() { Dtor(static_cast<T*>(this)); }
