@@ -34,21 +34,24 @@ class GENERICSTORAGES_API SClassPickerGraphPin : public SGraphPinObjectExtra
 public:
 	SLATE_BEGIN_ARGS(SClassPickerGraphPin) {}
 	SLATE_ARGUMENT_DEFAULT(bool, bRequiredMatch){true};
+	SLATE_ARGUMENT_DEFAULT(bool, bOnlyClass){true};
+	SLATE_ARGUMENT_DEFAULT(bool, bNotConnectable){false};
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, UEdGraphPin* InGraphPinObj, FProperty* InBindProp = nullptr);
 
-	static bool IsMatchedPinType(UEdGraphPin* InGraphPinObj);
-	static bool IsMatchedToCreate(UEdGraphPin* InGraphPinObj);
+	static bool IsMatchedPinType(UEdGraphPin* InGraphPinObj, bool bOnlyCls = true);
+	static bool IsMatchedToCreate(UEdGraphPin* InGraphPinObj, bool bOnlyCls = true);
 	static UClass* GetChoosenClass(UEdGraphPin* InGraphPinObj);
+	static UStruct* GetChoosenStruct(UEdGraphPin* InGraphPinObj, bool bOnlyCls = true);
 
 protected:
-	friend struct FClassPickerGraphPinUtils;
-	static bool GetMetaClassData(UEdGraphPin* InGraphPinObj, const UClass*& ImplementClass, TSet<const UClass*>& AllowClasses, TSet<const UClass*>& DisallowedClasses, FProperty* BindProp = nullptr);
+	friend struct FTypePickerGraphPinUtils;
 	bool SetMetaInfo(UEdGraphPin* InGraphPinObj);
 
-	// Called when a new class was picked via the asset picker
 	void OnPickedNewClass(UClass* ChosenClass);
+
+	void OnPickedNewStruct(const UScriptStruct* ChosenStruct);
 
 	//~ Begin SGraphPinObject Interface
 	virtual FReply OnClickUse() override;
@@ -62,7 +65,9 @@ protected:
 	FProperty* BindProp = nullptr;
 	TOptional<bool> bNotConnectable;
 	TSharedPtr<class IClassViewerFilter> ClassFilter;
+	TSharedPtr<class IStructViewerFilter> StructFilter;
 	bool bRequiredMatch = true;
+	bool bOnlyClass = true;
 };
 
 // CustomObjectPinPicker with [MetaClass, NotConnectable RequrieConnection]
